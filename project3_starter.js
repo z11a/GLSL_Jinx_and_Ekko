@@ -139,7 +139,7 @@ const INITIAL_LIGHT_X = 0
 const INITIAL_LIGHT_Y = 0
 const INITIAL_LIGHT_Z = -2
 const INITIAL_CAMERA_X = 0
-const INITIAL_CAMERA_Y = 0
+const INITIAL_CAMERA_Y = -0.65
 const INITIAL_CAMERA_Z = 0
 const INITIAL_NEAR = 1
 const INITIAL_FAR = 200
@@ -276,8 +276,8 @@ function main() {
 
     // setup our teapot with heavy scaling
     // Note the negative z-scaling to get into right-handed coordinates
-    //ekkomodel_matrix = new Matrix4().setScale(.02, .02, -.02)
-    ekko.world_matrix = new Matrix4().translate(0, -1, 3)
+    ekko.model_matrix = new Matrix4().rotate(120, 0, 1, 0)
+    ekko.world_matrix = new Matrix4().translate(0.6, -1.2   , 1.2)
     //ekko.model_matrix = new Matrix4().setScale(0.0002, 0.00002, 0.000002)
     g_ekko_model_matrix = new Matrix4()
 
@@ -330,7 +330,7 @@ function tick() {
 
     // rotate the arm constantly around the given axis (of the model)
     angle = ROTATION_SPEED * delta_time
-    ekko.world_matrix.concat(new Matrix4().setRotate(angle, ...g_rotation_axis))
+    //ekko.world_matrix.concat(new Matrix4().setRotate(angle, ...g_rotation_axis))
 
     draw()
 
@@ -342,6 +342,7 @@ function draw() {
     // setup our camera
     // always look at the teapot (a constant number because I'm lazy)
     var camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
+    //camera_matrix.translate(0, -0.5, 0)
     gl.uniformMatrix4fv(g_camera_ref, false, camera_matrix.elements)
     var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
     gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
@@ -515,7 +516,10 @@ function parseOBJ(data) {
     const vertices = [];
     const vertex_normals = [];
     const vertex_textures = [];
-    const faces = [];
+
+    const vertex_faces = [];
+    const normal_faces = [];
+    const texture_faces = [];
   
     const lines = data.split('\n');
     for (let line of lines) {
@@ -542,31 +546,52 @@ function parseOBJ(data) {
             );
         } else if (line.startsWith('f ')) {
             const parts = line.split(" ");
-            faces.push(
-              parseFloat(parts[1]),
-              parseFloat(parts[2]),
-              parseFloat(parts[3]),
-            );
+            smaller_parts = []
+
+            for (part of parts) {
+                smaller_parts.push(part.split("/"))
+            }
+            
+            // vertices
+            vertex_faces.push(
+                parseFloat(smaller_parts[1][0]),
+                parseFloat(smaller_parts[2][0]),
+                parseFloat(smaller_parts[3][0])
+            )
+
+            // textures
+            texture_faces.push(
+                parseFloat(smaller_parts[1][1]),
+                parseFloat(smaller_parts[2][1]),
+                parseFloat(smaller_parts[3][1])
+            )
+
+             // normals
+             normal_faces.push(
+                parseFloat(smaller_parts[1][2]),
+                parseFloat(smaller_parts[2][2]),
+                parseFloat(smaller_parts[3][2])
+            )
         } 
       }
-    
     // faces
     var finalVertices = [[], [], []];
-    for (const face of faces) {
-        // vertices
-        finalVertices[0].push(vertices[(face*3)-3])
-        finalVertices[0].push(vertices[(face*3)-3+1])
-        finalVertices[0].push(vertices[(face*3)-3+2])
+    for (vertex_face of vertex_faces) {
+        finalVertices[0].push(vertices[(vertex_face*3)-3])
+        finalVertices[0].push(vertices[(vertex_face*3)-2])
+        finalVertices[0].push(vertices[(vertex_face*3)-1])
+    }
 
-        // normals
-        finalVertices[1].push(vertex_normals[(face*3)-3])
-        finalVertices[1].push(vertex_normals[(face*3)-3+1])
-        finalVertices[1].push(vertex_normals[(face*3)-3+2])
+    for (normal_face of normal_faces) {
+        finalVertices[1].push(vertex_normals[(normal_face*3)-3])
+        finalVertices[1].push(vertex_normals[(normal_face*3)-2])
+        finalVertices[1].push(vertex_normals[(normal_face*3)-1])
+    }
 
-        // texture coords
-        finalVertices[2].push(vertex_textures[(face*3)-3])
-        finalVertices[2].push(vertex_textures[(face*3)-3+1])
-        finalVertices[2].push(vertex_textures[(face*3)-3+2])
+    for (texture_face of texture_faces) {
+        finalVertices[2].push(vertex_textures[(texture_face*3)-3])
+        finalVertices[2].push(vertex_textures[(texture_face*3)-2])
+        finalVertices[2].push(vertex_textures[(texture_face*3)-1])
     }
     return finalVertices
   }
