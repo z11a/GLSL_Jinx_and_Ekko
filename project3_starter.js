@@ -139,11 +139,11 @@ const INITIAL_LIGHT_X = 0
 const INITIAL_LIGHT_Y = 0
 const INITIAL_LIGHT_Z = -2
 const INITIAL_CAMERA_X = 0
-const INITIAL_CAMERA_Y = -0.65
-const INITIAL_CAMERA_Z = 0
+const INITIAL_CAMERA_Y = 1.2
+const INITIAL_CAMERA_Z = -3.00
 const INITIAL_NEAR = 1
 const INITIAL_FAR = 200
-const INITIAL_FOVY = 90
+const INITIAL_FOVY = 45
 const INITIAL_ASPECT = 1
 
 // Matrices for positioning the grid
@@ -166,6 +166,7 @@ class Model {
 }
 
 var ekko
+var jinx
 
 function main() {
 
@@ -233,6 +234,7 @@ function main() {
 
     // new meshes
     ekko = new Model(parseOBJ(EKKO_MESH_UNPARSED))
+    jinx = new Model(parseOBJ(JINX_MESH_UNPARSED))
 
     // get the VBO handle
     var VBOloc = gl.createBuffer();
@@ -246,18 +248,17 @@ function main() {
     grid_normals = grid_data[1] // fake normals
 
     // put the normal attributes after our mesh
-    var attributes = ekko.mesh.concat(grid_mesh).concat(ekko.normals).concat(grid_normals)
+    var attributes = ekko.mesh.concat(jinx.mesh).concat(grid_mesh).concat(ekko.normals).concat(jinx.normals).concat(grid_normals)
     gl.bindBuffer(gl.ARRAY_BUFFER, VBOloc)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW)
 
-    console.log(ekko)
     const FLOAT_SIZE = 4
 
     // put the attributes on the VBO
     if (setup_vec3('a_Position', 0) < 0) {
         return -1
     }
-    if (setup_vec3('a_Normal', (ekko.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) { // TODO fix ekko
+    if (setup_vec3('a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
 
@@ -276,13 +277,11 @@ function main() {
 
     // setup our teapot with heavy scaling
     // Note the negative z-scaling to get into right-handed coordinates
-    ekko.model_matrix = new Matrix4().rotate(120, 0, 1, 0)
-    ekko.world_matrix = new Matrix4().translate(0.6, -1.2   , 1.2)
-    //ekko.model_matrix = new Matrix4().setScale(0.0002, 0.00002, 0.000002)
-    g_ekko_model_matrix = new Matrix4()
-
-    // move the teapot in view of the camera
-    g_teapot_world_matrix = new Matrix4().translate(0, 0, 4)
+    ekko.model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(140, 0, 1, 0).translate(-0.5, 2.3, -2)
+    ekko.world_matrix = new Matrix4().translate(-1, -0.3, 4.5)
+   
+    jinx.model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-25, 0, 1, 0)
+    jinx.world_matrix = new Matrix4().translate(0.4,-2,2.0)
 
     // Put the grid "below" the camera (and cubes)
     g_model_matrix_grid = new Matrix4()
@@ -330,7 +329,13 @@ function tick() {
 
     // rotate the arm constantly around the given axis (of the model)
     angle = ROTATION_SPEED * delta_time
-    //ekko.world_matrix.concat(new Matrix4().setRotate(angle, ...g_rotation_axis))
+
+    // ref frame
+    jinx.world_matrix.rotate(angle, 0, 1, 0)
+
+
+    ekko.world_matrix = new Matrix4()   
+    ekko.world_matrix.concat(jinx.world_matrix).concat(g_world_matrix_grid)
 
     draw()
 
@@ -342,7 +347,7 @@ function draw() {
     // setup our camera
     // always look at the teapot (a constant number because I'm lazy)
     var camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
-    //camera_matrix.translate(0, -0.5, 0)
+    camera_matrix.translate(0, -0.5, 5)
     gl.uniformMatrix4fv(g_camera_ref, false, camera_matrix.elements)
     var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
     gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
@@ -374,13 +379,28 @@ function draw() {
 
     gl.drawArrays(gl.TRIANGLES, 0, ekko.vertex_count / 3)
 
+    // jinx
+    gl.uniformMatrix4fv(g_model_ref, false, jinx.model_matrix.elements)
+    gl.uniformMatrix4fv(g_world_ref, false, jinx.world_matrix.elements)
+    var inv = new Matrix4(jinx.world_matrix)
+        .concat(jinx.model_matrix)
+        .invert().transpose()
+    gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
+    gl.uniform3fv(g_ambient_light, new Float32Array([0, 0, 0]))
+    gl.uniform3fv(g_diffuse_color, new Float32Array([0.1, .5, .8]))
+    gl.uniform1f(g_spec_power, 64.0)
+    gl.uniform3fv(g_spec_color, new Float32Array([1, 1, 1]))
+
+    gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3, jinx.vertex_count / 3)
+
+
     // Draw the grid with gl.lines
     // Note that we can use the regular vertex offset with gl.LINES
     gl.uniform1i(g_lighting_ref, 0) // don't use lighting for the grid
     gl.uniform3fv(g_ambient_light, new Float32Array([0, 1, 0])) // grid is green
     gl.uniformMatrix4fv(g_model_ref, false, g_model_matrix_grid.elements)
     gl.uniformMatrix4fv(g_world_ref, false, g_world_matrix_grid.elements)
-    gl.drawArrays(gl.LINES, ekko.vertex_count / 3, g_grid_vertex_count)
+    gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3, g_grid_vertex_count)
 }
 
 // Helper to setup vec3 attributes
