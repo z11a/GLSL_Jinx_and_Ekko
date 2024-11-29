@@ -154,13 +154,12 @@ var g_world_matrix_grid
 var MESH_VERTEX_SIZE = 3
 
 // new meshes
-var g_ekko_model_matrix
-var g_ekko_world_matrix
-
 class Model {
     constructor(parsed_mesh) {
-        this.mesh = parsed_mesh;
-        this.length = parsed_mesh.length;
+        this.mesh = parsed_mesh[0];
+        this.normals = parsed_mesh[1];
+        this.texture_coords = parsed_mesh[2];
+        this.vertex_count = parsed_mesh[0].length;
         this.model_matrix = new Matrix4();
         this.world_matrix = new Matrix4();
     }
@@ -235,9 +234,6 @@ function main() {
     // new meshes
     ekko = new Model(parseOBJ(EKKO_MESH_UNPARSED))
 
-    // set the vertex count
-    g_vertex_count = TEAPOT_MESH.length / 3
-
     // get the VBO handle
     var VBOloc = gl.createBuffer();
     if (!VBOloc) {
@@ -250,17 +246,18 @@ function main() {
     grid_normals = grid_data[1] // fake normals
 
     // put the normal attributes after our mesh
-    var attributes = TEAPOT_MESH.concat(grid_mesh).concat(ekko.mesh).concat(TEAPOT_NORMALS).concat(grid_normals)
+    var attributes = ekko.mesh.concat(grid_mesh).concat(ekko.normals).concat(grid_normals)
     gl.bindBuffer(gl.ARRAY_BUFFER, VBOloc)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW)
 
+    console.log(ekko)
     const FLOAT_SIZE = 4
 
     // put the attributes on the VBO
     if (setup_vec3('a_Position', 0) < 0) {
         return -1
     }
-    if (setup_vec3('a_Normal', (TEAPOT_MESH.length + ekko.vertices + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) { // TODO fix ekko
+    if (setup_vec3('a_Normal', (ekko.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) { // TODO fix ekko
         return -1
     }
 
@@ -279,8 +276,9 @@ function main() {
 
     // setup our teapot with heavy scaling
     // Note the negative z-scaling to get into right-handed coordinates
-    g_teapot_model_matrix = new Matrix4().setScale(.02, .02, -.02)
-
+    //ekkomodel_matrix = new Matrix4().setScale(.02, .02, -.02)
+    ekko.world_matrix = new Matrix4().translate(0, -1, 3)
+    //ekko.model_matrix = new Matrix4().setScale(0.0002, 0.00002, 0.000002)
     g_ekko_model_matrix = new Matrix4()
 
     // move the teapot in view of the camera
@@ -332,7 +330,7 @@ function tick() {
 
     // rotate the arm constantly around the given axis (of the model)
     angle = ROTATION_SPEED * delta_time
-    g_teapot_model_matrix.concat(new Matrix4().setRotate(angle, ...g_rotation_axis))
+    ekko.world_matrix.concat(new Matrix4().setRotate(angle, ...g_rotation_axis))
 
     draw()
 
@@ -353,10 +351,10 @@ function draw() {
     gl.uniform3fv(g_light_ref, new Float32Array([-g_light_x, g_light_y, g_light_z]))
 
     // Update with our global model and world matrices
-    gl.uniformMatrix4fv(g_model_ref, false, g_teapot_model_matrix.elements)
-    gl.uniformMatrix4fv(g_world_ref, false, g_teapot_world_matrix.elements)
-    var inv = new Matrix4(g_teapot_world_matrix)
-        .concat(g_teapot_model_matrix)
+    gl.uniformMatrix4fv(g_model_ref, false, ekko.model_matrix.elements)
+    gl.uniformMatrix4fv(g_world_ref, false, ekko.world_matrix.elements)
+    var inv = new Matrix4(ekko.world_matrix)
+        .concat(ekko.model_matrix)
         .invert().transpose()
     gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
 
@@ -373,7 +371,7 @@ function draw() {
     gl.uniform1f(g_spec_power, 64.0)
     gl.uniform3fv(g_spec_color, new Float32Array([1, 1, 1]))
 
-    gl.drawArrays(gl.TRIANGLES, 0, g_vertex_count)
+    gl.drawArrays(gl.TRIANGLES, 0, ekko.vertex_count / 3)
 
     // Draw the grid with gl.lines
     // Note that we can use the regular vertex offset with gl.LINES
@@ -381,7 +379,7 @@ function draw() {
     gl.uniform3fv(g_ambient_light, new Float32Array([0, 1, 0])) // grid is green
     gl.uniformMatrix4fv(g_model_ref, false, g_model_matrix_grid.elements)
     gl.uniformMatrix4fv(g_world_ref, false, g_world_matrix_grid.elements)
-    gl.drawArrays(gl.LINES, g_vertex_count, g_grid_vertex_count)
+    gl.drawArrays(gl.LINES, ekko.vertex_count / 3, g_grid_vertex_count)
 }
 
 // Helper to setup vec3 attributes
@@ -515,34 +513,60 @@ function build_grid_attributes(grid_row_spacing, grid_column_spacing) {
 
 function parseOBJ(data) {
     const vertices = [];
+    const vertex_normals = [];
+    const vertex_textures = [];
     const faces = [];
   
     const lines = data.split('\n');
     for (let line of lines) {
         line = line.trim();
         if (line.startsWith('v ')) {
-            const parts = line.split(/\s+/);
+            const parts = line.split(" ");
             vertices.push(
                 parseFloat(parts[1]),
                 parseFloat(parts[2]),
                 parseFloat(parts[3])
             );
+        } else if (line.startsWith('vn ')) {
+            const parts = line.split(" ");
+            vertex_normals.push(
+                parseFloat(parts[1]),
+                parseFloat(parts[2]),
+                parseFloat(parts[3])
+            );
+        } else if (line.startsWith('vt ')) {
+            const parts = line.split(" ");
+            vertex_textures.push(
+                parseFloat(parts[1]),
+                parseFloat(parts[2]),
+            );
         } else if (line.startsWith('f ')) {
-            const parts = line.split(/\s+/);
+            const parts = line.split(" ");
             faces.push(
               parseFloat(parts[1]),
               parseFloat(parts[2]),
               parseFloat(parts[3]),
-            )
+            );
         } 
       }
-  
+    
     // faces
-    var finalVertices = [];
+    var finalVertices = [[], [], []];
     for (const face of faces) {
-        finalVertices.push(vertices[(face*3)-3])
-        finalVertices.push(vertices[(face*3)-3+1])
-        finalVertices.push(vertices[(face*3)-3+2])
+        // vertices
+        finalVertices[0].push(vertices[(face*3)-3])
+        finalVertices[0].push(vertices[(face*3)-3+1])
+        finalVertices[0].push(vertices[(face*3)-3+2])
+
+        // normals
+        finalVertices[1].push(vertex_normals[(face*3)-3])
+        finalVertices[1].push(vertex_normals[(face*3)-3+1])
+        finalVertices[1].push(vertex_normals[(face*3)-3+2])
+
+        // texture coords
+        finalVertices[2].push(vertex_textures[(face*3)-3])
+        finalVertices[2].push(vertex_textures[(face*3)-3+1])
+        finalVertices[2].push(vertex_textures[(face*3)-3+2])
     }
     return finalVertices
   }

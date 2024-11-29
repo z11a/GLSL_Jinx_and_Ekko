@@ -1,4 +1,4 @@
-EKKO_MESH_UNPARSED=`
+const EKKO_MESH_UNPARSED=`
 # Blender 4.0.2
 # www.blender.org
 mtllib ekko.mtl
