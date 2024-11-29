@@ -545,11 +545,14 @@ function parseOBJ(data) {
                 parseFloat(parts[2]),
             );
         } else if (line.startsWith('f ')) {
-            const parts = line.split(" ");
+
+            // line example = "f 1/1/1 2/2/2 3/3/3"
+            const parts = line.split(" ");          // parts = ["f", "1/1/1", "2/2/2", "3/3/3"]
+
             smaller_parts = []
 
             for (part of parts) {
-                smaller_parts.push(part.split("/"))
+                smaller_parts.push(part.split("/")) // smaller_parts = [["f"], ["1", "1", "1"], ["2", "2", "2"], ["3", "3", "3"]]
             }
             
             // vertices
