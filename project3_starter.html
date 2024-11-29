@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Load the JavaScript function "main" stored in the loaded file below -->
+
+<body onload="main()">
+    <!-- Select a JavaScript file -->
+    <script src="project3_starter.js"></script>
+    <script src="ekko.js"></script>
+    <script src="teapot.js"></script>
+
+    <!-- WebGL Utility Scripts -->
+    <script src="lib/webgl-utils.js"></script>
+    <script src="lib/webgl-debug.js"></script>
+    <script src="lib/cuon-utils.js"></script>
+    <script src="lib/cuon-matrix-quat03.js"></script>
+
+    <!-- Setup the Canvas -->
+    <p>
+        <canvas id="webgl" width="400" height="400">
+            Please use a browser that supports "canvas"
+        </canvas>
+    </p>
+
+    <!-- Radio buttons for rotation -->
+    <div>
+        <input type="radio" id="rotateX" name="rotation" value="X" checked/>
+        <label for="rotateX">Rotate X</label>
+  
+        <input type="radio" id="rotateY" name="rotation" value="Y" />
+        <label for="rotateY">Rotate Y</label>
+  
+        <input type="radio" id="rotateZ" name="rotation" value="Z" />
+        <label for="rotateZ">Rotate Z</label>
+    </div>
+
+    <!-- Button to actually change rotation -->
+    <p>
+        <input type="button" onclick="updateRotation()" value="Select Rotation">
+    </p>
+
+    <!-- Slider for light position -->
+    <div>
+        <input type="range" id="sliderLightX" min="-10" max="10" step=".01" />
+        <label id="lightX" for="sliderLightX"></label>
+    </div>
+    <div>
+        <input type="range" id="sliderLightY" min="-10" max="10" step=".01" />
+        <label id="lightY" for="sliderLightY"></label>
+    </div>
+    <div>
+        <input type="range" id="sliderLightZ" min="-10" max="4" step=".01" />
+        <label id="lightZ" for="sliderLightZ"></label>
+    </div>
+
+    <!-- Camera Sliders -->
+    <div>
+        <input type="range" id="sliderCamX" min="-3" max="3" step=".01" />
+        <label id="cameraX" for="sliderCamX">a</label>
+    </div>
+    <div>
+        <input type="range" id="sliderCamY" min="-3" max="3" step=".01" />
+        <label id="cameraY" for="sliderCamY"></label>
+    </div>
+    <div>
+        <input type="range" id="sliderCamZ" min="-3" max="3" step=".01" />
+        <label id="cameraZ" for="sliderCamZ"></label>
+    </div>
+
+    <!-- Projective Sliders -->
+    <div>
+        <input type="range" id="sliderNear" min="1" max="4" step=".01" />
+        <label id="near" for="sliderNear"></label>
+    </div>
+    <div>
+        <input type="range" id="sliderFar" min="20" max="200" step="1" />
+        <label id="far" for="sliderFar"></label>
+    </div>
+    <div>
+        <input type="range" id="sliderFOVY" min="10" max="170" step=".01" />
+        <label id="fovy" for="sliderFOVY"></label>
+    </div>
+    <div>
+        <input type="range" id="sliderAspect" min=".5" max="2" step=".01" />
+        <label id="aspect" for="sliderAspect"></label>
+    </div>
+
+
+</body>
+
+</html>
