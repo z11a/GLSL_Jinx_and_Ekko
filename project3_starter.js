@@ -1,4 +1,4 @@
-var VSHADER_SOURCE_EKKO = `
+var VSHADER_SOURCE_CHARACTERS = `
     attribute vec3 a_Position;
     attribute vec3 a_Normal;
     attribute vec2 a_TexCoord;
@@ -20,7 +20,7 @@ var VSHADER_SOURCE_EKKO = `
     }
 `
 
-var FSHADER_SOURCE_EKKO = `
+var FSHADER_SOURCE_CHARACTERS = `
     precision mediump float;
     
     // Setup our varyings
@@ -43,7 +43,8 @@ var FSHADER_SOURCE_EKKO = `
     uniform vec3 u_SpecColor; // the specular color on this model
 
     // textures
-    uniform sampler2D u_Texture;
+    uniform sampler2D u_Texture_Ekko;
+    uniform sampler2D u_Texture_Jinx;
     varying vec2 v_TexCoord;
 
     // Reminder, since this comes up a lot in this math
@@ -90,111 +91,12 @@ var FSHADER_SOURCE_EKKO = `
             // calculate fall-off with power
             float specular = pow(angle, u_SpecPower);
 
-            // finally, add our lights together
-            // note that webGL will take the min(1.0, color) for us for each color component
-            gl_FragColor = vec4(u_AmbientLight + diffuse * texture2D(u_Texture, v_TexCoord).rgb + specular * u_SpecColor, 1.0);
-        }
-        else {
-            gl_FragColor = vec4(u_AmbientLight, 1.0);
-        }
-    }
-`
-
-var VSHADER_SOURCE_JINX = `
-    attribute vec3 a_Position;
-    attribute vec3 a_Normal;
-    attribute vec2 a_TexCoord;
-
-    uniform mat4 u_Model;
-    uniform mat4 u_World;
-    uniform mat4 u_Camera;
-    uniform mat4 u_Projective;
-
-    varying vec3 v_Normal;
-    varying vec3 v_Position;
-    varying vec2 v_Offset;
-    varying vec2 v_TexCoord;
-    void main() {
-        gl_Position = u_Projective * u_Camera * u_World * u_Model * vec4(a_Position, 1.0);
-        v_Normal = a_Normal;
-        v_Position = a_Position;
-        v_TexCoord = a_TexCoord;
-    }
-`
-
-var FSHADER_SOURCE_JINX= `
-    precision mediump float;
-    
-    // Setup our varyings
-    varying vec3 v_Normal;
-    varying vec3 v_Position;
-
-    // determine whether or not to use lighting
-    uniform int u_Lighting;
-
-    // Note that our uniforms need not be declared in the vertex shader
-    uniform highp mat4 u_Model;
-    uniform highp mat4 u_World;
-    uniform highp mat4 u_Camera;
-    uniform highp mat4 u_CameraInverse;
-    uniform highp mat4 u_InverseTranspose; // for normal transformation, model and world
-    uniform vec3 u_Light; // where the light is located
-    uniform vec3 u_AmbientLight; // the lighting from the world
-    uniform vec3 u_DiffuseColor; // the base color of the model
-    uniform float u_SpecPower; // the specular "power" of the light on this model
-    uniform vec3 u_SpecColor; // the specular color on this model
-
-    // textures
-    uniform sampler2D u_Texture;
-    varying vec2 v_TexCoord;
-
-    // Reminder, since this comes up a lot in this math
-    // for points A and B, B-A produces the vector pointing from A to B
-
-    // helper function for homogeneous transformation
-    mediump vec3 hom_reduce(mediump vec4 v) {
-        // component-wise division of v
-        return vec3(v) / v.w;
-    }
-
-    void main() {
-        if (u_Lighting > 0) {
-            // usual normal transformation
-            vec3 worldNormal = normalize(mat3(u_InverseTranspose) * normalize(v_Normal));
-            // usual position transformation
-            vec3 worldPos = hom_reduce(u_World * u_Model * vec4(v_Position, 1.0));
-
-            // also transform the position into the camera space to calculate the specular
-            vec3 cameraPos = hom_reduce(u_Camera * vec4(worldPos, 1.0));
-
-            // calculate our light direction
-            vec3 lightDir = normalize(u_Light - worldPos); // get the direction towards the light
-
-            // first, calculate our diffuse light
-            float diffuse = dot(lightDir, worldNormal);
-
-            // second, calculate our specular highlight
-            // see https://learnopengl.com/Lighting/Basic-Lighting for more details
-            vec3 reflectDir = normalize(reflect(-lightDir, worldNormal)); // reflect the light past our normal
-
-            // We need our reflection to be in Camera space
-            // note that this is a direction rather than a normal
-            // so we don't need an inverse transpose of the world->camera matrix
-            // but we _do_ need to apply a linear operation, so we use mat3
-            vec3 cameraReflectDir = normalize(mat3(u_Camera) * reflectDir);
-
-            // Now, get the direction to the camera, noting that the camera is at 0, 0, 0 in camera space
-            vec3 cameraDir = normalize(-cameraPos);
-
-            // calculate the angle between the cameraDir and
-            //   the reflected light direction _toward_ the camera(in camera space)
-            float angle = max(dot(cameraDir, cameraReflectDir), 0.0);
-            // calculate fall-off with power
-            float specular = pow(angle, u_SpecPower);
+            vec3 texColor = (texture2D(u_Texture_Ekko, v_TexCoord)).rgb;
+            //vec3 texColor = (texture2D(u_Texture_Ekko, v_TexCoord) * texture2D(u_Texture_Jinx, v_TexCoord)).rgb;
 
             // finally, add our lights together
             // note that webGL will take the min(1.0, color) for us for each color component
-            gl_FragColor = vec4(u_AmbientLight + diffuse * texture2D(u_Texture, v_TexCoord).rgb + specular * u_SpecColor, 1.0);
+            gl_FragColor = vec4((u_AmbientLight + diffuse) * texColor + specular * u_SpecColor, 1.0);
         }
         else {
             gl_FragColor = vec4(u_AmbientLight, 1.0);
@@ -213,42 +115,27 @@ var g_canvas
 var gl
 
 // ref to shader
-var g_program_ekko
-var g_program_jinx
+var g_program_characters
+//var g_program_jinx
 
 // pointers
 
-// ekko
-var g_model_ref_ekko
-var g_camera_ref_ekko
-var g_lighting_ref_ekko
-var g_vertex_count_ekko
-var g_projection_ref_ekko
-var g_inverse_transpose_ref_ekko
-var g_camera_inverse_transpose_ref_ekko
-var g_light_ref_ekko
-var g_ambient_light_ekko
-var g_diffuse_color_ekko
-var g_spec_power_ekko
-var g_spec_color_ekko
-var g_last_frame_ms_ekko
-var g_framebuffer_ekko
-
-// jinx
-var g_model_ref_jinx
-var g_camera_ref_jinx
-var g_lighting_ref_jinx
-var g_vertex_count_jinx
-var g_projection_ref_jinx
-var g_inverse_transpose_ref_jinx
-var g_camera_inverse_transpose_ref_jinx
-var g_light_ref_jinx
-var g_ambient_light_jinx
-var g_diffuse_color_jinx
-var g_spec_power_jinx
-var g_spec_color_jinx
-var g_last_frame_ms_jinx
-var g_framebuffer_jinx
+var g_model_ref
+var g_camera_ref
+var g_lighting_ref
+var g_vertex_count
+var g_projection_ref
+var g_inverse_transpose_ref
+var g_camera_inverse_transpose_ref
+var g_light_ref
+var g_ambient_light
+var g_diffuse_color
+var g_spec_power
+var g_spec_color
+var g_last_frame_ms
+var g_framebuffer
+var g_image_location_ekko
+var g_image_location_jinx
 
 // grid
 var g_grid_vertex_count
@@ -357,20 +244,14 @@ function main() {
         return;
     }
 
-    /*// Initialize GPU's vertex and fragment shaders programs
-    if (!initShaders(gl, VSHADER_SOURCE_EKKO, FSHADER_SOURCE_EKKO)) {
+    // Initialize GPU's vertex and fragment shaders programs
+    /*if (!initShaders(gl, VSHADER_SOURCE_EKKO, FSHADER_SOURCE_EKKO)) {
         console.log('Failed to intialize shaders.')
         return;
     }*/
 
-    g_program_ekko = createProgram(gl, VSHADER_SOURCE_EKKO, FSHADER_SOURCE_EKKO)
-    if (!g_program_ekko) {
-        console.log('Failed to create program')
-        return
-    }
-
-    g_program_jinx = createProgram(gl, VSHADER_SOURCE_JINX, FSHADER_SOURCE_JINX)
-    if (!g_program_ekko) {
+    g_program_characters = createProgram(gl, VSHADER_SOURCE_CHARACTERS, FSHADER_SOURCE_CHARACTERS)
+    if (!g_program_characters) {
         console.log('Failed to create program')
         return
     }
@@ -400,66 +281,38 @@ function main() {
     ekko.model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(130, 0, 1, 0).translate(-0.3, 2.6, -1)
     ekko.world_matrix = new Matrix4().translate(-1, -0.3, 4.5)
    
-    jinx.model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-30, 0, 1, 0)
+    jinx.model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-35, 0, 1, 0)
     jinx.world_matrix = new Matrix4().translate(0.7, -2, -1)
 
     // Put the grid "below" the camera (and cubes)
     g_model_matrix_grid = new Matrix4()
     g_world_matrix_grid = new Matrix4().translate(0, -2, 0)
 
+    gl.useProgram(g_program_characters)
+
+    g_model_ref = gl.getUniformLocation(g_program_characters, 'u_Model')
+    g_world_ref = gl.getUniformLocation(g_program_characters, 'u_World')
+    g_lighting_ref = gl.getUniformLocation(g_program_characters, 'u_Lighting')
+    g_camera_ref = gl.getUniformLocation(g_program_characters, 'u_Camera')
+    g_projection_ref = gl.getUniformLocation(g_program_characters, 'u_Projective')
+    g_inverse_transpose_ref = gl.getUniformLocation(g_program_characters, 'u_InverseTranspose')
+    g_light_ref = gl.getUniformLocation(g_program_characters, 'u_Light')
+    g_ambient_light = gl.getUniformLocation(g_program_characters, 'u_AmbientLight')
+    g_diffuse_color = gl.getUniformLocation(g_program_characters, 'u_DiffuseColor')
+    g_spec_power = gl.getUniformLocation(g_program_characters, 'u_SpecPower')
+    g_spec_color = gl.getUniformLocation(g_program_characters, 'u_SpecColor')
+    g_image_location_ekko = gl.getUniformLocation(g_program_characters, 'u_Texture_Ekko')
+    g_image_location_jinx = gl.getUniformLocation(g_program_characters, 'u_Texture_Ekko')
+
     // textures
-    var ekko_texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, ekko_texture);
+    //gl.uniform1i(g_image_location_jinx, 1)
+    setupTextures();
 
-    // default fill just in case
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-        new Uint8Array([0, 0, 255, 255]));
-
-    var ekko_texture_image = new Image();
-    ekko_texture_image.src = "textures/ekko_base_tx_cm.png";
-    ekko_texture_image.addEventListener('load', function() {
-        gl.bindTexture(gl.TEXTURE_2D, ekko_texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ekko_texture_image);
-        gl.generateMipmap(gl.TEXTURE_2D);
-    });
-
-    // setup ekko uniforms
-    g_model_ref_ekko = gl.getUniformLocation(g_program_ekko, 'u_Model')
-    g_world_ref_ekko = gl.getUniformLocation(g_program_ekko, 'u_World')
-    g_lighting_ref_ekko = gl.getUniformLocation(g_program_ekko, 'u_Lighting')
-    g_camera_ref_ekko = gl.getUniformLocation(g_program_ekko, 'u_Camera')
-    g_projection_ref_ekko = gl.getUniformLocation(g_program_ekko, 'u_Projective')
-    g_inverse_transpose_ref_ekko = gl.getUniformLocation(g_program_ekko, 'u_InverseTranspose')
-    g_light_ref_ekko = gl.getUniformLocation(g_program_ekko, 'u_Light')
-    g_ambient_light_ekko = gl.getUniformLocation(g_program_ekko, 'u_AmbientLight')
-    g_diffuse_color_ekko = gl.getUniformLocation(g_program_ekko, 'u_DiffuseColor')
-    g_spec_power_ekko = gl.getUniformLocation(g_program_ekko, 'u_SpecPower')
-    g_spec_color_ekko = gl.getUniformLocation(g_program_ekko, 'u_SpecColor')
-
-    // setup up jinx uniforms
-    g_model_ref_jinx = gl.getUniformLocation(g_program_jinx, 'u_Model')
-    g_world_ref_jinx = gl.getUniformLocation(g_program_jinx, 'u_World')
-    g_lighting_ref_jinx = gl.getUniformLocation(g_program_jinx, 'u_Lighting')
-    g_camera_ref_jinx = gl.getUniformLocation(g_program_jinx, 'u_Camera')
-    g_projection_ref_jinx = gl.getUniformLocation(g_program_jinx, 'u_Projective')
-    g_inverse_transpose_ref_jinx = gl.getUniformLocation(g_program_jinx, 'u_InverseTranspose')
-    g_light_ref_jinx = gl.getUniformLocation(g_program_jinx, 'u_Light')
-    g_ambient_light_jinx = gl.getUniformLocation(g_program_jinx, 'u_AmbientLight')
-    g_diffuse_color_jinx = gl.getUniformLocation(g_program_jinx, 'u_DiffuseColor')
-    g_spec_power_jinx = gl.getUniformLocation(g_program_jinx, 'u_SpecPower')
-    g_spec_color_jinx = gl.getUniformLocation(g_program_jinx, 'u_SpecColor')
-
-    gl.useProgram(g_program_ekko)
-    gl.uniform3fv(g_ambient_light_ekko, new Float32Array([0, 0, 0]))
-    gl.uniform3fv(g_diffuse_color_ekko, new Float32Array([0.1, .5, .8]))
-    gl.uniform1f(g_spec_power_ekko, 64.0)
-    gl.uniform3fv(g_spec_color_ekko, new Float32Array([1, 1, 1]))
-
-    gl.useProgram(g_program_jinx)
-    gl.uniform3fv(g_ambient_light_jinx, new Float32Array([0, 0, 0]))
-    gl.uniform3fv(g_diffuse_color_jinx, new Float32Array([0.1, .5, .8]))
-    gl.uniform1f(g_spec_power_jinx, 64.0)
-    gl.uniform3fv(g_spec_color_jinx, new Float32Array([1, 1, 1]))
+    gl.useProgram(g_program_characters)
+    gl.uniform3fv(g_ambient_light, new Float32Array([0, 0, 0]))
+    gl.uniform3fv(g_diffuse_color, new Float32Array([0.1, .5, .8]))
+    gl.uniform1f(g_spec_power, 64.0)
+    gl.uniform3fv(g_spec_color, new Float32Array([1, 1, 1]))
 
     gl.enable(gl.CULL_FACE)
     gl.enable(gl.DEPTH_TEST)
@@ -481,6 +334,44 @@ function main() {
     updateAspect(INITIAL_ASPECT)
 
     tick()
+}
+
+function setupTextures() {
+    // ekko
+    var ekko_texture = gl.createTexture();
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, ekko_texture);
+
+    // default fill just in case
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+        new Uint8Array([0, 0, 255, 255]));
+
+    var ekko_texture_image = new Image();
+    ekko_texture_image.src = "textures/ekko_base_tx_cm_x_flipped.png";
+    ekko_texture_image.addEventListener('load', function() {
+        gl.bindTexture(gl.TEXTURE_2D, ekko_texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ekko_texture_image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    });
+
+    // jinx
+    var jinx_texture = gl.createTexture();
+
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, jinx_texture);
+
+    // default fill just in case
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+        new Uint8Array([0, 0, 255, 255]));
+
+    var jinx_texture_image = new Image();
+    jinx_texture_image.src = "textures/jinx_base_tx_cm_x_flipped.png";
+    jinx_texture_image.addEventListener('load', function() {
+        gl.bindTexture(gl.TEXTURE_2D, jinx_texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, jinx_texture_image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    });
 }
 
 // extra constants for cleanliness
@@ -527,84 +418,67 @@ function draw() {
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-    // ekko
-    gl.useProgram(g_program_ekko)
+    gl.useProgram(g_program_characters)
 
     // setup our camera
     var camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
     camera_matrix.translate(0, -0.5, 5)
-    gl.uniformMatrix4fv(g_camera_ref_ekko, false, camera_matrix.elements)
+    gl.uniformMatrix4fv(g_camera_ref, false, camera_matrix.elements)
     var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
-    gl.uniformMatrix4fv(g_projection_ref_ekko, false, perspective_matrix.elements)
+    gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
 
     // setup our light source
     // note the negative X-direction to make us right-handed
-    gl.uniform3fv(g_light_ref_ekko, new Float32Array([-g_light_x, g_light_y, g_light_z]))
+    gl.uniform3fv(g_light_ref, new Float32Array([-g_light_x, g_light_y, g_light_z]))
 
     // put the attributes on the VBO
-    if (setup_vec(3, g_program_ekko, 'a_Position', 0) < 0) {
+    if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
         return -1
     }
-    if (setup_vec(3, g_program_ekko, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
-    if (setup_vec(2, g_program_ekko, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
-                                                     ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
+                                                          ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
 
     // use lighting for ekko
-    gl.uniform1i(g_lighting_ref_ekko, 1)
+    gl.uniform1i(g_lighting_ref, 1)
+
+    // texture
+    gl.uniform1i(g_image_location_ekko, 0)
     
     // Update with our global model and world matrices
-    gl.uniformMatrix4fv(g_model_ref_ekko, false, ekko.model_matrix.elements)
-    gl.uniformMatrix4fv(g_world_ref_ekko, false, ekko.world_matrix.elements)
+    gl.uniformMatrix4fv(g_model_ref, false, ekko.model_matrix.elements)
+    gl.uniformMatrix4fv(g_world_ref, false, ekko.world_matrix.elements)
     var inv = new Matrix4(ekko.world_matrix)
         .concat(ekko.model_matrix)
         .invert().transpose()
-    gl.uniformMatrix4fv(g_inverse_transpose_ref_ekko, false, inv.elements)
+    gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
 
     // draw ekko
     gl.drawArrays(gl.TRIANGLES, 0, ekko.vertex_count / 3)
 
-    // jinx
-    gl.useProgram(g_program_jinx)
-
-    // camera ref
-    gl.uniformMatrix4fv(g_camera_ref_jinx, false, camera_matrix.elements)
-    gl.uniformMatrix4fv(g_projection_ref_jinx, false, perspective_matrix.elements)
-
-    // light ref
-    gl.uniform3fv(g_light_ref_jinx, new Float32Array([-g_light_x, g_light_y, g_light_z]))
-    gl.uniform1i(g_lighting_ref_jinx, 1)
-    // put the attributes on the VBO
-    if (setup_vec(3, g_program_jinx, 'a_Position', 0) < 0) {
-        return -1
-    }
-    if (setup_vec(3, g_program_jinx, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
-        return -1
-    }
-    if (setup_vec(2, g_program_jinx, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
-                                                     ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
-        return -1
-    }
-
-    gl.uniformMatrix4fv(g_model_ref_jinx, false, jinx.model_matrix.elements)
-    gl.uniformMatrix4fv(g_world_ref_jinx, false, jinx.world_matrix.elements)
+    gl.uniformMatrix4fv(g_model_ref, false, jinx.model_matrix.elements)
+    gl.uniformMatrix4fv(g_world_ref, false, jinx.world_matrix.elements)
     var inv = new Matrix4(jinx.world_matrix)
         .concat(jinx.model_matrix)
         .invert().transpose()
-    gl.uniformMatrix4fv(g_inverse_transpose_ref_jinx, false, inv.elements)
+    gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
+
+    // texture
+    gl.uniform1i(g_image_location_jinx, 1)
 
     // draw jinx
     gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3, jinx.vertex_count / 3)
 
     /*// Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
     // Note that we can use the regular vertex offset with gl.LINES
-    gl.uniform1i(g_lighting_ref_jinx, 0) // don't use lighting for the grid
-    gl.uniform3fv(g_ambient_light_jinx, new Float32Array([0, 1, 0])) // grid is green
-    gl.uniformMatrix4fv(g_model_ref_jinx, false, g_model_matrix_grid.elements)
-    gl.uniformMatrix4fv(g_world_ref_jinx, false, g_world_matrix_grid.elements)
+    gl.uniform1i(g_lighting_ref, 0) // don't use lighting for the grid
+    gl.uniform3fv(g_ambient_light, new Float32Array([0, 1, 0])) // grid is green
+    gl.uniformMatrix4fv(g_model_ref, false, g_model_matrix_grid.elements)
+    gl.uniformMatrix4fv(g_world_ref, false, g_world_matrix_grid.elements)
     gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3, g_grid_vertex_count)
 */}
 
@@ -817,9 +691,8 @@ function parseOBJ(data) {
     }
 
     for (texture_face of texture_faces) {
-        finalVertices[2].push(vertex_textures[(texture_face*3)-3])
-        finalVertices[2].push(vertex_textures[(texture_face*3)-2])
-        finalVertices[2].push(vertex_textures[(texture_face*3)-1])
+        finalVertices[2].push(vertex_textures[(texture_face*2)-2])
+        finalVertices[2].push(vertex_textures[(texture_face*2)-1])
     }
     return finalVertices
   }
