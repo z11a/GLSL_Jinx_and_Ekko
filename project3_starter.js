@@ -441,7 +441,7 @@ function draw() {
     gl.uniform1i(g_lighting_ref, 1)
 
     // default ambient lighting for ekko and jinx
-    gl.uniform3fv(g_ambient_light, new Float32Array([0.25, 0.25, 0.25]))
+    gl.uniform3fv(g_ambient_light, new Float32Array([0.8, 0.8, 0.8]))
     
     // Update with our global model and world matrices
     gl.uniformMatrix4fv(g_model_ref, false, ekko.model_matrix.elements)
