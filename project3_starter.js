@@ -43,8 +43,7 @@ var FSHADER_SOURCE_CHARACTERS = `
     uniform vec3 u_SpecColor; // the specular color on this model
 
     // textures
-    uniform sampler2D u_Texture_Ekko;
-    uniform sampler2D u_Texture_Jinx;
+    uniform sampler2D u_Texture;
     varying vec2 v_TexCoord;
 
     // Reminder, since this comes up a lot in this math
@@ -91,8 +90,7 @@ var FSHADER_SOURCE_CHARACTERS = `
             // calculate fall-off with power
             float specular = pow(angle, u_SpecPower);
 
-            vec3 texColor = (texture2D(u_Texture_Ekko, v_TexCoord)).rgb;
-            //vec3 texColor = (texture2D(u_Texture_Ekko, v_TexCoord) * texture2D(u_Texture_Jinx, v_TexCoord)).rgb;
+            vec3 texColor = texture2D(u_Texture, v_TexCoord).rgb;
 
             // finally, add our lights together
             // note that webGL will take the min(1.0, color) for us for each color component
@@ -116,7 +114,6 @@ var gl
 
 // ref to shader
 var g_program_characters
-//var g_program_jinx
 
 // pointers
 
@@ -134,8 +131,7 @@ var g_spec_power
 var g_spec_color
 var g_last_frame_ms
 var g_framebuffer
-var g_image_location_ekko
-var g_image_location_jinx
+var g_image_location
 
 // grid
 var g_grid_vertex_count
@@ -301,11 +297,9 @@ function main() {
     g_diffuse_color = gl.getUniformLocation(g_program_characters, 'u_DiffuseColor')
     g_spec_power = gl.getUniformLocation(g_program_characters, 'u_SpecPower')
     g_spec_color = gl.getUniformLocation(g_program_characters, 'u_SpecColor')
-    g_image_location_ekko = gl.getUniformLocation(g_program_characters, 'u_Texture_Ekko')
-    g_image_location_jinx = gl.getUniformLocation(g_program_characters, 'u_Texture_Ekko')
+    g_image_location = gl.getUniformLocation(g_program_characters, 'u_Texture')
 
     // textures
-    //gl.uniform1i(g_image_location_jinx, 1)
     setupTextures();
 
     gl.useProgram(g_program_characters)
@@ -420,17 +414,6 @@ function draw() {
 
     gl.useProgram(g_program_characters)
 
-    // setup our camera
-    var camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
-    camera_matrix.translate(0, -0.5, 5)
-    gl.uniformMatrix4fv(g_camera_ref, false, camera_matrix.elements)
-    var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
-    gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
-
-    // setup our light source
-    // note the negative X-direction to make us right-handed
-    gl.uniform3fv(g_light_ref, new Float32Array([-g_light_x, g_light_y, g_light_z]))
-
     // put the attributes on the VBO
     if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
         return -1
@@ -443,14 +426,22 @@ function draw() {
         return -1
     }
 
+    // setup our camera
+    var camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
+    camera_matrix.translate(0, -0.5, 5)
+    gl.uniformMatrix4fv(g_camera_ref, false, camera_matrix.elements)
+    var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
+    gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
+
+    // setup our light source
+    // note the negative X-direction to make us right-handed
+    gl.uniform3fv(g_light_ref, new Float32Array([-g_light_x, g_light_y, g_light_z]))
+    
     // use lighting for ekko
     gl.uniform1i(g_lighting_ref, 1)
 
     // default ambient lighting for ekko and jinx
     gl.uniform3fv(g_ambient_light, new Float32Array([0.25, 0.25, 0.25]))
-
-    // texture
-    gl.uniform1i(g_image_location_ekko, 0)
     
     // Update with our global model and world matrices
     gl.uniformMatrix4fv(g_model_ref, false, ekko.model_matrix.elements)
@@ -459,6 +450,9 @@ function draw() {
         .concat(ekko.model_matrix)
         .invert().transpose()
     gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
+    
+    // ekko texture
+    gl.uniform1i(g_image_location, 0)
 
     // draw ekko
     gl.drawArrays(gl.TRIANGLES, 0, ekko.vertex_count / 3)
@@ -470,8 +464,8 @@ function draw() {
         .invert().transpose()
     gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
 
-    // texture
-    gl.uniform1i(g_image_location_jinx, 1)
+    // jinx texture
+    gl.uniform1i(g_image_location, 1)
 
     // draw jinx
     gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3, jinx.vertex_count / 3)
