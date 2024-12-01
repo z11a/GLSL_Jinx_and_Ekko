@@ -446,6 +446,9 @@ function draw() {
     // use lighting for ekko
     gl.uniform1i(g_lighting_ref, 1)
 
+    // default ambient lighting for ekko and jinx
+    gl.uniform3fv(g_ambient_light, new Float32Array([0.25, 0.25, 0.25]))
+
     // texture
     gl.uniform1i(g_image_location_ekko, 0)
     
@@ -473,14 +476,14 @@ function draw() {
     // draw jinx
     gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3, jinx.vertex_count / 3)
 
-    /*// Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
+    // Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
     // Note that we can use the regular vertex offset with gl.LINES
     gl.uniform1i(g_lighting_ref, 0) // don't use lighting for the grid
     gl.uniform3fv(g_ambient_light, new Float32Array([0, 1, 0])) // grid is green
     gl.uniformMatrix4fv(g_model_ref, false, g_model_matrix_grid.elements)
     gl.uniformMatrix4fv(g_world_ref, false, g_world_matrix_grid.elements)
     gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3, g_grid_vertex_count)
-*/}
+}
 
 // Helper to setup vec3 attributes
 function setup_vec(size, program, name, offset) {
