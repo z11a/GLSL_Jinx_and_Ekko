@@ -149,6 +149,7 @@ var g_fovy
 var g_aspect
 
 // constants for setup
+const INITIAL_AMBIENT_STRENGTH = 0.75
 const INITIAL_LIGHT_X = 0
 const INITIAL_LIGHT_Y = 0
 const INITIAL_LIGHT_Z = -2
@@ -185,6 +186,10 @@ var jinx
 function main() {
 
     // Listen for slider changes
+    slider_input = document.getElementById('sliderAmbientLightStrength')
+    slider_input.addEventListener('input', (event) => {
+        updateAmbientLightStrength(event.target.value)
+    })
     slider_input = document.getElementById('sliderLightX')
     slider_input.addEventListener('input', (event) => {
         updateLightX(event.target.value)
@@ -279,6 +284,7 @@ function main() {
    
     jinx.model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-35, 0, 1, 0)
     jinx.world_matrix = new Matrix4().translate(0.7, -2, -1)
+    console.log(jinx.world_matrix.elements)
 
     // Put the grid "below" the camera (and cubes)
     g_model_matrix_grid = new Matrix4()
@@ -302,7 +308,6 @@ function main() {
     // textures
     setupTextures();
 
-    gl.useProgram(g_program_characters)
     gl.uniform3fv(g_ambient_light, new Float32Array([0, 0, 0]))
     gl.uniform3fv(g_diffuse_color, new Float32Array([0.1, .5, .8]))
     gl.uniform1f(g_spec_power, 64.0)
@@ -316,6 +321,7 @@ function main() {
     g_rotation_axis = [0, 1, 0]
 
     // Initialize our data
+    updateAmbientLightStrength(INITIAL_AMBIENT_STRENGTH)
     updateLightX(INITIAL_LIGHT_X)
     updateLightY(INITIAL_LIGHT_Y)
     updateLightZ(INITIAL_LIGHT_Z)
@@ -385,7 +391,7 @@ function tick() {
     delta_time = current_time - g_last_frame_ms
     g_last_frame_ms = current_time
 
-    // rotate the arm constantly around the given axis (of the model)
+    // rotate
     var angleSwitch = 1;
     if (Math.floor(current_time / 1000) % 2 == 0) {
         angleSwitch *= -1
@@ -398,6 +404,11 @@ function tick() {
     // ref frame
     ekko.world_matrix = new Matrix4()   
     ekko.world_matrix.concat(jinx.world_matrix).concat(g_world_matrix_grid)
+
+    // lighting rotate
+    g_light_x = jinx.world_matrix.elements[12] + 0.2
+    g_light_y = jinx.world_matrix.elements[13] + 0.3
+    g_light_z = jinx.world_matrix.elements[14]
 
     draw()
 
@@ -441,7 +452,7 @@ function draw() {
     gl.uniform1i(g_lighting_ref, 1)
 
     // default ambient lighting for ekko and jinx
-    gl.uniform3fv(g_ambient_light, new Float32Array([0.8, 0.8, 0.8]))
+    //gl.uniform3fv(g_ambient_light, new Float32Array([0.2, 0.2, 0.2]))
     
     // Update with our global model and world matrices
     gl.uniformMatrix4fv(g_model_ref, false, ekko.model_matrix.elements)
@@ -473,7 +484,7 @@ function draw() {
     // Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
     // Note that we can use the regular vertex offset with gl.LINES
     gl.uniform1i(g_lighting_ref, 0) // don't use lighting for the grid
-    gl.uniform3fv(g_ambient_light, new Float32Array([0, 1, 0])) // grid is green
+    //gl.uniform3fv(g_ambient_light, new Float32Array([1, 1, 1])) // grid is green
     gl.uniformMatrix4fv(g_model_ref, false, g_model_matrix_grid.elements)
     gl.uniformMatrix4fv(g_world_ref, false, g_world_matrix_grid.elements)
     gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3, g_grid_vertex_count)
@@ -505,7 +516,11 @@ function updateRotation() {
     g_rotation_axis[1] = Number(rotateY.checked)
     g_rotation_axis[2] = Number(rotateZ.checked)
 }
-
+function updateAmbientLightStrength(amount) {
+    label = document.getElementById('ambientLightStrength')
+    label.textContent = `Ambient Light Strength: ${Number(amount).toFixed(2)}`
+    gl.uniform3fv(g_ambient_light, new Float32Array([amount, amount, amount]))
+}
 function updateLightX(amount) {
     label = document.getElementById('lightX')
     label.textContent = `Light X: ${Number(amount).toFixed(2)}`

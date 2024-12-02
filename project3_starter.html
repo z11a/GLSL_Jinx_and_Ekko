@@ -40,7 +40,11 @@
         <input type="button" onclick="updateRotation()" value="Select Rotation">
     </p>
 
-    <!-- Slider for light position -->
+    <!-- Slider for light position / strength -->
+    <div>
+        <input type="range" id="sliderAmbientLightStrength" min="0" max="1" step=".001" />
+        <label id="ambientLightStrength" for="sliderAmbientLightStrength"></label>
+    </div>
     <div>
         <input type="range" id="sliderLightX" min="-10" max="10" step=".01" />
         <label id="lightX" for="sliderLightX"></label>
