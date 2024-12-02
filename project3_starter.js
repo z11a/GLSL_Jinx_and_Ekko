@@ -149,10 +149,11 @@ var g_fovy
 var g_aspect
 
 // constants for setup
-const INITIAL_AMBIENT_STRENGTH = 0.75
-const INITIAL_LIGHT_X = 0
-const INITIAL_LIGHT_Y = 0
-const INITIAL_LIGHT_Z = -2
+const INITIAL_AMBIENT_STRENGTH = 0.45
+const INITIAL_SPEC_STRENGTH = 34.0
+const INITIAL_LIGHT_X = 0.75
+const INITIAL_LIGHT_Y = 0.86
+const INITIAL_LIGHT_Z = -1.00
 const INITIAL_CAMERA_X = 1.25
 const INITIAL_CAMERA_Y = -2.35
 const INITIAL_CAMERA_Z = -3.00
@@ -189,6 +190,10 @@ function main() {
     slider_input = document.getElementById('sliderAmbientLightStrength')
     slider_input.addEventListener('input', (event) => {
         updateAmbientLightStrength(event.target.value)
+    })
+    slider_input = document.getElementById('sliderSpecLightStrength')
+    slider_input.addEventListener('input', (event) => {
+        updateSpecLightStrength(event.target.value)
     })
     slider_input = document.getElementById('sliderLightX')
     slider_input.addEventListener('input', (event) => {
@@ -308,9 +313,7 @@ function main() {
     // textures
     setupTextures();
 
-    gl.uniform3fv(g_ambient_light, new Float32Array([0, 0, 0]))
     gl.uniform3fv(g_diffuse_color, new Float32Array([0.1, .5, .8]))
-    gl.uniform1f(g_spec_power, 64.0)
     gl.uniform3fv(g_spec_color, new Float32Array([1, 1, 1]))
 
     gl.enable(gl.CULL_FACE)
@@ -322,6 +325,7 @@ function main() {
 
     // Initialize our data
     updateAmbientLightStrength(INITIAL_AMBIENT_STRENGTH)
+    updateSpecLightStrength(INITIAL_SPEC_STRENGTH)
     updateLightX(INITIAL_LIGHT_X)
     updateLightY(INITIAL_LIGHT_Y)
     updateLightZ(INITIAL_LIGHT_Z)
@@ -405,10 +409,10 @@ function tick() {
     ekko.world_matrix = new Matrix4()   
     ekko.world_matrix.concat(jinx.world_matrix).concat(g_world_matrix_grid)
 
-    // lighting rotate
+    /*// lighting rotate
     g_light_x = jinx.world_matrix.elements[12] + 0.2
     g_light_y = jinx.world_matrix.elements[13] + 0.3
-    g_light_z = jinx.world_matrix.elements[14]
+    g_light_z = jinx.world_matrix.elements[14]*/
 
     draw()
 
@@ -521,6 +525,12 @@ function updateAmbientLightStrength(amount) {
     label.textContent = `Ambient Light Strength: ${Number(amount).toFixed(2)}`
     gl.uniform3fv(g_ambient_light, new Float32Array([amount, amount, amount]))
 }
+function updateSpecLightStrength(amount) {
+    label = document.getElementById('specLightStrength')
+    label.textContent = `Specular Light Strength: ${Number(amount).toFixed(2)}`
+    gl.uniform1f(g_spec_power, amount)
+}
+
 function updateLightX(amount) {
     label = document.getElementById('lightX')
     label.textContent = `Light X: ${Number(amount).toFixed(2)}`
