@@ -137,6 +137,7 @@ var g_image_location
 var g_grid_vertex_count
 
 // global parameters
+var g_camera_matrix
 var g_light_x
 var g_light_y
 var g_light_z
@@ -289,7 +290,6 @@ function main() {
    
     jinx.model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-35, 0, 1, 0)
     jinx.world_matrix = new Matrix4().translate(0.7, -2, -1)
-    console.log(jinx.world_matrix.elements)
 
     // Put the grid "below" the camera (and cubes)
     g_model_matrix_grid = new Matrix4()
@@ -336,6 +336,9 @@ function main() {
     updateFar(INITIAL_FAR)
     updateFOVY(INITIAL_FOVY)
     updateAspect(INITIAL_ASPECT)
+
+    g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
+    g_camera_matrix.translate(0, -0.5, 5)
 
     tick()
 }
@@ -403,7 +406,9 @@ function tick() {
 
     angle = angleSwitch * ROTATION_SPEED * delta_time
     
-    jinx.world_matrix.rotate(angle, 0, 1, 0)
+    g_camera_matrix.rotate(angle, 0, 1, 0)
+
+    //jinx.world_matrix.rotate(angle, 0, 1, 0)
     
     // ref frame
     ekko.world_matrix = new Matrix4()   
@@ -442,9 +447,8 @@ function draw() {
     }
 
     // setup our camera
-    var camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
-    camera_matrix.translate(0, -0.5, 5)
-    gl.uniformMatrix4fv(g_camera_ref, false, camera_matrix.elements)
+    
+    gl.uniformMatrix4fv(g_camera_ref, false, g_camera_matrix.elements)
     var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
     gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
 
