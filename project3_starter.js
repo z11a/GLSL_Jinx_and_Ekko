@@ -185,6 +185,12 @@ class Model {
 var ekko
 var jinx
 
+// each frame uses a different vbo that is loaded before anything is drawn
+var VBO_Animation_Frames = []
+
+// each element = [[ekko model][jinx model]]
+var models = []
+
 function main() {
 
     // Listen for slider changes
@@ -264,26 +270,12 @@ function main() {
     }
 
     // new meshes
-    ekko = new Model(parseOBJ(EKKO_MESH_UNPARSED))
-    jinx = new Model(parseOBJ(JINX_MESH_UNPARSED))
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_0)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
 
-    // get the VBO handle
-    var VBOloc = gl.createBuffer();
-    if (!VBOloc) {
-        console.log('Failed to create the vertex buffer object')
-        return -1
-    }
+    gl.useProgram(g_program_characters)
 
-    grid_data = build_grid_attributes(1, 1)
-    grid_mesh = grid_data[0]
-    grid_normals = grid_data[1] // fake normals
-
-    // put the normal attributes after our mesh
-    var attributes = ekko.mesh.concat(jinx.mesh).concat(grid_mesh)                  // vertices
-                    .concat(ekko.normals).concat(jinx.normals).concat(grid_normals) // normals
-                    .concat(ekko.texture_coords).concat(jinx.texture_coords)        // tex coords
-    gl.bindBuffer(gl.ARRAY_BUFFER, VBOloc)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW)
+    // setup all animation frames
+    setupAnimFrames(models)
 
     ekko.model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(130, 0, 1, 0).translate(-0.3, 2.6, -1)
     ekko.world_matrix = new Matrix4().translate(-1, -0.3, 4.5)
@@ -294,8 +286,6 @@ function main() {
     // Put the grid "below" the camera (and cubes)
     g_model_matrix_grid = new Matrix4()
     g_world_matrix_grid = new Matrix4().translate(0, -2, 0)
-
-    gl.useProgram(g_program_characters)
 
     g_model_ref = gl.getUniformLocation(g_program_characters, 'u_Model')
     g_world_ref = gl.getUniformLocation(g_program_characters, 'u_World')
@@ -341,6 +331,47 @@ function main() {
     g_camera_matrix.translate(0, -0.5, 5)
 
     tick()
+}
+
+function setupAnimFrames(models) {
+    grid_data = build_grid_attributes(1, 1)
+    grid_mesh = grid_data[0]
+    grid_normals = grid_data[1] // fake normals
+
+    for (let i = 0; i < models.length; i++) {
+    ekko = models[i][0]
+    jinx = models[i][1]
+
+    // get the VBO handle
+    var VBOloc = gl.createBuffer();
+    if (!VBOloc) {
+    console.log('Failed to create the vertex buffer object')
+    return -1
+    }
+
+    // put the normal attributes after our mesh
+    var attributes = ekko.mesh.concat(jinx.mesh).concat(grid_mesh)              // vertices
+                .concat(ekko.normals).concat(jinx.normals).concat(grid_normals) // normals
+                .concat(ekko.texture_coords).concat(jinx.texture_coords)        // tex coords
+    gl.bindBuffer(gl.ARRAY_BUFFER, VBOloc)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW)
+
+    const FLOAT_SIZE = 4
+
+    // put the attributes on the VBO
+    if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
+        return -1
+    }
+    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+        return -1
+    }
+    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
+                                                          ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+        return -1
+    }
+
+    VBO_Animation_Frames.push(VBOloc)
+    }
 }
 
 function setupTextures() {
@@ -424,30 +455,7 @@ function tick() {
     requestAnimationFrame(tick, g_canvas)
 }
 
-// draw to the screen on the next frame
-function draw() {
-    const FLOAT_SIZE = 4;
-
-    // Clear the canvas with a black background
-    gl.clearColor(0.0, 0.0, 0.0, 1.0)
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-    gl.useProgram(g_program_characters)
-
-    // put the attributes on the VBO
-    if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
-        return -1
-    }
-    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
-        return -1
-    }
-    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
-                                                          ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
-        return -1
-    }
-
-    // setup our camera
-    
+function drawJinxEkkoAnimation() {
     gl.uniformMatrix4fv(g_camera_ref, false, g_camera_matrix.elements)
     var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
     gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
@@ -488,6 +496,23 @@ function draw() {
 
     // draw jinx
     gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3, jinx.vertex_count / 3)
+}
+
+// draw to the screen on the next frame
+function draw() {
+    const FLOAT_SIZE = 4;
+
+    // Clear the canvas with a black background
+    gl.clearColor(0.0, 0.0, 0.0, 1.0)
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+    gl.useProgram(g_program_characters)
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, VBO_Animation_Frames[0])
+
+    // setup our camera
+    
+    drawJinxEkkoAnimation()
 
     // Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
     // Note that we can use the regular vertex offset with gl.LINES

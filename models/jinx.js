@@ -1,4 +1,4 @@
-const JINX_MESH_UNPARSED=`
+const JINX_MESH_UNPARSED_0=`
 # Blender 4.0.2
 # www.blender.org
 mtllib jinx.mtl
