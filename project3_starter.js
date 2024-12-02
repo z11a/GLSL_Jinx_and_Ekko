@@ -277,10 +277,12 @@ function main() {
     // new meshes for each frame
     models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_0)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
     models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_1)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_2)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
 
     gl.useProgram(g_program_characters)
 
     // setup all animation frames
+    frameNumber = 0;
     setupAnimFrames(models)
 
     g_ekko_model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(130, 0, 1, 0).translate(-0.3, 2.6, -1)
@@ -426,11 +428,8 @@ function tick() {
     var angleSwitch = 1;
     if (Math.floor(current_time / 1000) % 2 == 0) {
         angleSwitch *= -1
-        frameNumber = 1;
+        frameNumber += 1;
     } 
-    else {
-        frameNumber = 0
-    }
 
     angle = angleSwitch * ROTATION_SPEED * delta_time
     
@@ -522,6 +521,9 @@ function draw() {
     gl.uniform3fv(g_light_ref, new Float32Array([-g_light_x, g_light_y, g_light_z]))
 
     // decide what frame to draw
+    if(frameNumber > 2) {
+        frameNumber = 0
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, VBO_Animation_Frames[frameNumber])
     ekko = models[frameNumber][0]
     jinx = models[frameNumber][1]
