@@ -185,8 +185,13 @@ class Model {
 var ekko
 var jinx
 
+// dont want these changing
+var g_ekko_model_matrix
+var g_jinx_model_matrix
+
 // each frame uses a different vbo that is loaded before anything is drawn
 var VBO_Animation_Frames = []
+var frameNumber = 0;
 
 // each element = [[ekko model][jinx model]]
 var models = []
@@ -269,19 +274,20 @@ function main() {
         return
     }
 
-    // new meshes
+    // new meshes for each frame
     models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_0)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_1)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
 
     gl.useProgram(g_program_characters)
 
     // setup all animation frames
     setupAnimFrames(models)
 
-    ekko.model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(130, 0, 1, 0).translate(-0.3, 2.6, -1)
-    ekko.world_matrix = new Matrix4().translate(-1, -0.3, 4.5)
+    g_ekko_model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(130, 0, 1, 0).translate(-0.3, 2.6, -1)
+    g_ekko_world_matrix = new Matrix4().translate(-1, -0.3, 4.5)
    
-    jinx.model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-35, 0, 1, 0)
-    jinx.world_matrix = new Matrix4().translate(0.7, -2, -1)
+    g_jinx_model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-35, 0, 1, 0)
+    g_jinx_world_matrix = new Matrix4().translate(0.7, -2, -1)
 
     // Put the grid "below" the camera (and cubes)
     g_model_matrix_grid = new Matrix4()
@@ -339,38 +345,25 @@ function setupAnimFrames(models) {
     grid_normals = grid_data[1] // fake normals
 
     for (let i = 0; i < models.length; i++) {
-    ekko = models[i][0]
-    jinx = models[i][1]
+        ekko = models[i][0]
+        jinx = models[i][1]
 
-    // get the VBO handle
-    var VBOloc = gl.createBuffer();
-    if (!VBOloc) {
-    console.log('Failed to create the vertex buffer object')
-    return -1
-    }
-
-    // put the normal attributes after our mesh
-    var attributes = ekko.mesh.concat(jinx.mesh).concat(grid_mesh)              // vertices
-                .concat(ekko.normals).concat(jinx.normals).concat(grid_normals) // normals
-                .concat(ekko.texture_coords).concat(jinx.texture_coords)        // tex coords
-    gl.bindBuffer(gl.ARRAY_BUFFER, VBOloc)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW)
-
-    const FLOAT_SIZE = 4
-
-    // put the attributes on the VBO
-    if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
+        // get the VBO handle
+        var VBOloc = gl.createBuffer();
+        if (!VBOloc) {
+        console.log('Failed to create the vertex buffer object')
         return -1
-    }
-    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
-        return -1
-    }
-    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
-                                                          ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
-        return -1
-    }
+        }
 
-    VBO_Animation_Frames.push(VBOloc)
+        // put the normal attributes after our mesh
+        var attributes = ekko.mesh.concat(jinx.mesh).concat(grid_mesh)              // vertices
+                    .concat(ekko.normals).concat(jinx.normals).concat(grid_normals) // normals
+                    .concat(ekko.texture_coords).concat(jinx.texture_coords)        // tex coords
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, VBOloc)
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW) // TODO: figure out how to change attributes
+
+        VBO_Animation_Frames.push(VBOloc)
     }
 }
 
@@ -433,7 +426,11 @@ function tick() {
     var angleSwitch = 1;
     if (Math.floor(current_time / 1000) % 2 == 0) {
         angleSwitch *= -1
+        frameNumber = 1;
     } 
+    else {
+        frameNumber = 0
+    }
 
     angle = angleSwitch * ROTATION_SPEED * delta_time
     
@@ -442,8 +439,8 @@ function tick() {
     //jinx.world_matrix.rotate(angle, 0, 1, 0)
     
     // ref frame
-    ekko.world_matrix = new Matrix4()   
-    ekko.world_matrix.concat(jinx.world_matrix).concat(g_world_matrix_grid)
+    g_ekko_world_matrix = new Matrix4()   
+    g_ekko_world_matrix.concat(g_jinx_world_matrix).concat(g_world_matrix_grid)
 
     /*// lighting rotate
     g_light_x = jinx.world_matrix.elements[12] + 0.2
@@ -456,13 +453,18 @@ function tick() {
 }
 
 function drawJinxEkkoAnimation() {
-    gl.uniformMatrix4fv(g_camera_ref, false, g_camera_matrix.elements)
-    var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
-    gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
+    const FLOAT_SIZE = 4
 
-    // setup our light source
-    // note the negative X-direction to make us right-handed
-    gl.uniform3fv(g_light_ref, new Float32Array([-g_light_x, g_light_y, g_light_z]))
+    if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
+        return -1
+    }
+    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+        return -1
+    }
+    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
+                                                        ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+        return -1
+    }
     
     // use lighting for ekko
     gl.uniform1i(g_lighting_ref, 1)
@@ -471,10 +473,10 @@ function drawJinxEkkoAnimation() {
     //gl.uniform3fv(g_ambient_light, new Float32Array([0.2, 0.2, 0.2]))
     
     // Update with our global model and world matrices
-    gl.uniformMatrix4fv(g_model_ref, false, ekko.model_matrix.elements)
-    gl.uniformMatrix4fv(g_world_ref, false, ekko.world_matrix.elements)
-    var inv = new Matrix4(ekko.world_matrix)
-        .concat(ekko.model_matrix)
+    gl.uniformMatrix4fv(g_model_ref, false, g_ekko_model_matrix.elements)
+    gl.uniformMatrix4fv(g_world_ref, false, g_ekko_world_matrix.elements)
+    var inv = new Matrix4(g_ekko_world_matrix)
+        .concat(g_ekko_model_matrix)
         .invert().transpose()
     gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
     
@@ -484,10 +486,10 @@ function drawJinxEkkoAnimation() {
     // draw ekko
     gl.drawArrays(gl.TRIANGLES, 0, ekko.vertex_count / 3)
 
-    gl.uniformMatrix4fv(g_model_ref, false, jinx.model_matrix.elements)
-    gl.uniformMatrix4fv(g_world_ref, false, jinx.world_matrix.elements)
-    var inv = new Matrix4(jinx.world_matrix)
-        .concat(jinx.model_matrix)
+    gl.uniformMatrix4fv(g_model_ref, false, g_jinx_model_matrix.elements)
+    gl.uniformMatrix4fv(g_world_ref, false, g_jinx_world_matrix.elements)
+    var inv = new Matrix4(g_jinx_world_matrix)
+        .concat(g_jinx_model_matrix)
         .invert().transpose()
     gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
 
@@ -498,20 +500,32 @@ function drawJinxEkkoAnimation() {
     gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3, jinx.vertex_count / 3)
 }
 
+function nextFrame() {
+    return (Math.floor(current_time / 1000) % 2 == 0);
+}
+
 // draw to the screen on the next frame
 function draw() {
-    const FLOAT_SIZE = 4;
-
     // Clear the canvas with a black background
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
     gl.useProgram(g_program_characters)
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, VBO_Animation_Frames[0])
-
     // setup our camera
-    
+    gl.uniformMatrix4fv(g_camera_ref, false, g_camera_matrix.elements)
+    var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
+    gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
+
+    // setup our light source
+    // note the negative X-direction to make us right-handed
+    gl.uniform3fv(g_light_ref, new Float32Array([-g_light_x, g_light_y, g_light_z]))
+
+    // decide what frame to draw
+    gl.bindBuffer(gl.ARRAY_BUFFER, VBO_Animation_Frames[frameNumber])
+    ekko = models[frameNumber][0]
+    jinx = models[frameNumber][1]
+
     drawJinxEkkoAnimation()
 
     // Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
