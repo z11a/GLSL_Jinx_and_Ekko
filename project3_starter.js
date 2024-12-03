@@ -161,7 +161,7 @@ const INITIAL_CAMERA_Z = -3.00
 const INITIAL_NEAR = 1
 const INITIAL_FAR = 200
 const INITIAL_FOVY = 45
-const INITIAL_ASPECT = 1
+const INITIAL_ASPECT = 1.5
 
 // Matrices for positioning the grid
 var g_model_matrix_grid
@@ -192,6 +192,7 @@ var g_jinx_model_matrix
 // each frame uses a different vbo that is loaded before anything is drawn
 var VBO_Animation_Frames = []
 var frameNumber = 0;
+var animationLevel = 0;
 
 // each element = [[ekko model][jinx model]]
 var models = []
@@ -199,6 +200,10 @@ var models = []
 function main() {
 
     // Listen for slider changes
+    slider_input = document.getElementById('sliderFPS')
+    slider_input.addEventListener('input', (event) => {
+        updateFPS(event.target.value)
+    })
     slider_input = document.getElementById('sliderAmbientLightStrength')
     slider_input.addEventListener('input', (event) => {
         updateAmbientLightStrength(event.target.value)
@@ -340,8 +345,9 @@ function main() {
     updateFOVY(INITIAL_FOVY)
     updateAspect(INITIAL_ASPECT)
 
-    g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
-    g_camera_matrix.translate(0, -0.5, 5)
+    // inital camera setup
+    g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, -1, -1, 4, 0, 1, 0)
+    g_camera_matrix.translate(0, -1.3, 5)
 
     tick()
 }
@@ -409,13 +415,45 @@ function setupTextures() {
         gl.bindTexture(gl.TEXTURE_2D, jinx_texture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, jinx_texture_image);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        
+        // DEFAULT BLUE - has to load within this function so that jinx's texture doesn't override it.
+        var basic_texture = gl.createTexture();
+
+        gl.activeTexture(gl.TEXTURE2)
+        gl.bindTexture(gl.TEXTURE_2D, basic_texture);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+            new Uint8Array([0, 0, 255, 255]));
     });
+
+
 }
 
 // extra constants for cleanliness
-var ROTATION_SPEED = .01
-var delta_time = 0;
+var ROTATION_SPEED = .02
 var reverse = false;
+var delta_time_characters = 0
+var delta_time_g = 0
+var current_time = Date.now()
+var fps = 1000 / 10
+
+function characterAnimationTick() {
+    if (delta_time_characters > fps) {
+        g_last_frame_ms = current_time - (delta_time_characters % fps);
+        
+        // reversing animation
+        if (reverse) {
+            frameNumber -= 1;
+        }
+        else {
+            frameNumber += 1;
+        }
+
+        // reset delta_time
+        delta_time_characters = 0
+    }
+}
+
 // function to apply all the logic for a single frame tick
 function tick() {
     // time since the last frame
@@ -423,31 +461,39 @@ function tick() {
     // and in general, this may be close to zero
     // NOTE: Be sure to use this delta_time!
     //   otherwise your animation will be framerate-dependent!
-
     // calculate time since the last frame
-    var current_time = Date.now()
-    delta_time += current_time - g_last_frame_ms
+    current_time = Date.now()
+    delta_time_characters += current_time - g_last_frame_ms
+    delta_time_g += current_time - g_last_frame_ms
     g_last_frame_ms = current_time
-
-    // rotate
-    if ((!reverse && delta_time % 40) == 0) {
-        console.log("here2")
-        console.log(reverse)
-        frameNumber += 1;
-    } 
-    else if (reverse && delta_time % 40 == 0) {
-        frameNumber -= 1;
+    
+    if (delta_time_g > 1500) {
+        animationLevel = 1
     }
-    console.log(frameNumber)
+    if (delta_time_g > 3000) {
+        animationLevel = 2
+    }
 
+    // camera rotation animation
     var angleSwitch = 1;
-    if (Math.floor(delta_time / 3000) % 2 == 0) {
+    if (Math.floor(delta_time_g / 4000) % 2 == 0) {
         angleSwitch *= -1
     }
 
     angle = angleSwitch * ROTATION_SPEED * 4
     
     g_camera_matrix.rotate(angle, 0, 1, 0)
+    console.log(animationLevel)
+    // character animation 
+    switch(animationLevel) {
+        case 0:
+            break;
+        case 1:
+            break;
+        case 2:
+            characterAnimationTick();
+            break;
+    }
 
     //jinx.world_matrix.rotate(angle, 0, 1, 0)
     
@@ -479,8 +525,9 @@ function drawJinxEkkoAnimation() {
         return -1
     }
     
-    // use lighting for ekko
+    // use lighting for ekko and jinx
     gl.uniform1i(g_lighting_ref, 1)
+
 
     // default ambient lighting for ekko and jinx
     //gl.uniform3fv(g_ambient_light, new Float32Array([0.2, 0.2, 0.2]))
@@ -494,7 +541,17 @@ function drawJinxEkkoAnimation() {
     gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
     
     // ekko texture
-    gl.uniform1i(g_image_location, 0)
+    switch (animationLevel) {
+        case 0:
+            gl.uniform1i(g_image_location, 2)
+            break;
+        case 1:
+            gl.uniform1i(g_image_location, 0)
+            break;
+        case 2:
+            gl.uniform1i(g_image_location, 0)
+            break;
+    }
 
     // draw ekko
     gl.drawArrays(gl.TRIANGLES, 0, ekko.vertex_count / 3)
@@ -507,14 +564,20 @@ function drawJinxEkkoAnimation() {
     gl.uniformMatrix4fv(g_inverse_transpose_ref, false, inv.elements)
 
     // jinx texture
-    gl.uniform1i(g_image_location, 1)
+    switch (animationLevel) {
+        case 0:
+            gl.uniform1i(g_image_location, 2)
+            break;
+        case 1:
+            gl.uniform1i(g_image_location, 1)
+            break;
+        case 2:
+            gl.uniform1i(g_image_location, 1)
+            break;
+    }
 
     // draw jinx
     gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3, jinx.vertex_count / 3)
-}
-
-function nextFrame() {
-    return (Math.floor(current_time / 1000) % 2 == 0);
 }
 
 // draw to the screen on the next frame
@@ -576,6 +639,11 @@ function setup_vec(size, program, name, offset) {
     return 0
 }
 
+function updateFPS() {
+    label = document.getElementById('fps')
+    label.textContent = `FPS: ${Number(amount).toFixed(2)}`
+    fps = 1000 / amount
+}
 // Event to change which rotation is selected
 function updateRotation() {
     var rotateX = document.getElementById('rotateX')

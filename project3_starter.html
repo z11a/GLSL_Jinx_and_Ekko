@@ -18,10 +18,18 @@
 
     <!-- Setup the Canvas -->
     <p>
-        <canvas id="webgl" width="400" height="400">
-            Please use a browser that supports "canvas"
-        </canvas>
+        <div style = "text-align:center;">
+            <canvas id="webgl" width="600" height="400">
+                Please use a browser that supports "canvas"
+            </canvas>
+        </div>
     </p>
+
+    <!-- FPS Slider -->
+    <div style = "text-align:center;">
+        <input type="range" id="sliderFPS" min="0" max="120" step=".01" />
+        <label id="fps" for="sliderFPS"></label>
+    </div>
 
     <!-- Radio buttons for rotation -->
     <div>
@@ -47,7 +55,7 @@
     </div>
     <div>
         <input type="range" id="sliderSpecLightStrength" min="0" max="64" step=".001" />
-        <label id="specLightStrength" for="specAmbientLightStrength"></label>
+        <label id="specLightStrength" for="sliderSpecLightStrength"></label>
     </div>
     <div>
         <input type="range" id="sliderLightX" min="-10" max="10" step=".01" />
