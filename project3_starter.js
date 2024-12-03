@@ -276,8 +276,13 @@ function main() {
 
     // new meshes for each frame
     models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_0)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
-    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_1)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
-    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_2)), new Model(parseOBJ(JINX_MESH_UNPARSED_0))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_1)), new Model(parseOBJ(JINX_MESH_UNPARSED_1))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_2)), new Model(parseOBJ(JINX_MESH_UNPARSED_2))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_3)), new Model(parseOBJ(JINX_MESH_UNPARSED_3))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_4)), new Model(parseOBJ(JINX_MESH_UNPARSED_4))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_5)), new Model(parseOBJ(JINX_MESH_UNPARSED_5))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_6)), new Model(parseOBJ(JINX_MESH_UNPARSED_6))])
+    models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_7)), new Model(parseOBJ(JINX_MESH_UNPARSED_7))])
 
     gl.useProgram(g_program_characters)
 
@@ -285,7 +290,7 @@ function main() {
     frameNumber = 0;
     setupAnimFrames(models)
 
-    g_ekko_model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(130, 0, 1, 0).translate(-0.3, 2.6, -1)
+    g_ekko_model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(130, 0, 1, 0).translate(-0.3, 2.6, -2.3)
     g_ekko_world_matrix = new Matrix4().translate(-1, -0.3, 4.5)
    
     g_jinx_model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-35, 0, 1, 0)
@@ -408,8 +413,9 @@ function setupTextures() {
 }
 
 // extra constants for cleanliness
-var ROTATION_SPEED = .008
-
+var ROTATION_SPEED = .01
+var delta_time = 0;
+var reverse = false;
 // function to apply all the logic for a single frame tick
 function tick() {
     // time since the last frame
@@ -417,21 +423,29 @@ function tick() {
     // and in general, this may be close to zero
     // NOTE: Be sure to use this delta_time!
     //   otherwise your animation will be framerate-dependent!
-    var delta_time
 
     // calculate time since the last frame
     var current_time = Date.now()
-    delta_time = current_time - g_last_frame_ms
+    delta_time += current_time - g_last_frame_ms
     g_last_frame_ms = current_time
 
     // rotate
-    var angleSwitch = 1;
-    if (Math.floor(current_time / 1000) % 2 == 0) {
-        angleSwitch *= -1
+    if ((!reverse && delta_time % 40) == 0) {
+        console.log("here2")
+        console.log(reverse)
         frameNumber += 1;
     } 
+    else if (reverse && delta_time % 40 == 0) {
+        frameNumber -= 1;
+    }
+    console.log(frameNumber)
 
-    angle = angleSwitch * ROTATION_SPEED * delta_time
+    var angleSwitch = 1;
+    if (Math.floor(delta_time / 3000) % 2 == 0) {
+        angleSwitch *= -1
+    }
+
+    angle = angleSwitch * ROTATION_SPEED * 4
     
     g_camera_matrix.rotate(angle, 0, 1, 0)
 
@@ -512,6 +526,8 @@ function draw() {
     gl.useProgram(g_program_characters)
 
     // setup our camera
+    /*g_camera_matrix.setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
+    g_camera_matrix.translate(0, -0.5, 5)*/
     gl.uniformMatrix4fv(g_camera_ref, false, g_camera_matrix.elements)
     var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
     gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
@@ -521,8 +537,13 @@ function draw() {
     gl.uniform3fv(g_light_ref, new Float32Array([-g_light_x, g_light_y, g_light_z]))
 
     // decide what frame to draw
-    if(frameNumber > 2) {
-        frameNumber = 0
+    if (frameNumber > models.length - 1) {
+        reverse = true;
+        frameNumber -= 1
+    }
+    else if (frameNumber < 0) {
+        reverse = false;
+        frameNumber += 1
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, VBO_Animation_Frames[frameNumber])
     ekko = models[frameNumber][0]
