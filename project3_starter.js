@@ -150,6 +150,7 @@ var g_fovy
 var g_aspect
 
 // constants for setup
+const INITIAL_FPS = 12
 const INITIAL_AMBIENT_STRENGTH = 0.45
 const INITIAL_SPEC_STRENGTH = 34.0
 const INITIAL_LIGHT_X = 0.75
@@ -332,6 +333,7 @@ function main() {
     g_rotation_axis = [0, 1, 0]
 
     // Initialize our data
+    updateFPS(INITIAL_FPS)
     updateAmbientLightStrength(INITIAL_AMBIENT_STRENGTH)
     updateSpecLightStrength(INITIAL_SPEC_STRENGTH)
     updateLightX(INITIAL_LIGHT_X)
@@ -347,7 +349,7 @@ function main() {
 
     // inital camera setup
     g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, -1, -1, 4, 0, 1, 0)
-    g_camera_matrix.translate(0, -1.3, 5)
+    g_camera_matrix.rotate(-5, 0, 1, 0).translate(0, -1.3, 5)
 
     tick()
 }
@@ -483,7 +485,7 @@ function tick() {
     angle = angleSwitch * ROTATION_SPEED * 4
     
     g_camera_matrix.rotate(angle, 0, 1, 0)
-    console.log(animationLevel)
+
     // character animation 
     switch(animationLevel) {
         case 0:
@@ -639,10 +641,11 @@ function setup_vec(size, program, name, offset) {
     return 0
 }
 
-function updateFPS() {
+function updateFPS(amount) {
     label = document.getElementById('fps')
     label.textContent = `FPS: ${Number(amount).toFixed(2)}`
     fps = 1000 / amount
+    console.log(fps)
 }
 // Event to change which rotation is selected
 function updateRotation() {
