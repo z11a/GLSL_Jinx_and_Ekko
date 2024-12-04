@@ -102,6 +102,32 @@ var FSHADER_SOURCE_CHARACTERS = `
     }
 `
 
+var VSHADER_SOURCE_SKYBOX = `
+    attribute vec4 a_position;
+
+    varying vec4 v_position;
+
+    void main() {
+        v_position = a_position;
+        gl_Position = a_position;
+        gl_Position.z = 1.00;
+    }
+` 
+
+var FSHADER_SOURCE_SKYBOX = `
+    precision mediump float;
+    
+    uniform samplerCube u_skybox;
+    uniform mat4 u_viewDirectionProjectionInverse;
+    
+    varying vec4 v_position;
+
+    void main() {
+        vec4 t = u_viewDirectionProjectionInverse * v_position;
+        gl_FragColor = textureCube(u_skybox, normalize(t.xyz / t.w));
+    }
+` 
+
 // the rotation matrix being updated each frame
 var g_teapot_model_matrix
 
@@ -194,13 +220,27 @@ var g_jinx_model_matrix
 // each frame uses a different vbo that is loaded before anything is drawn
 var VBO_Animation_Frames = []
 var frameNumber = 0;
-var animationLevel = 0;
+var animationLevel = 2;
 
 // each element = [[ekko model][jinx model]]
 var models = []
 
-function main() {
+// skybox
+var positionLocation
+var skyboxLocation
+var viewDirectionProjectionInverseLocation
 
+var skybox = 
+    [
+      -1, -1, 
+       1, -1, 
+      -1,  1, 
+      -1,  1,
+       1, -1,
+       1,  1,
+    ];
+
+function main() {
     // Listen for slider changes
     slider_input = document.getElementById('sliderFPS')
     slider_input.addEventListener('input', (event) => {
@@ -227,7 +267,12 @@ function main() {
         updateLightZ(event.target.value)
     })
 
-    slider_input = document.getElementById('sliderCamX')
+    slider_input = document.getElementById('sliderRotateCameraY')
+    slider_input.addEventListener('input', (event) => {
+        rotateCameraY(event.target.value)
+    })
+
+    /*slider_input = document.getElementById('sliderCamX')
     slider_input.addEventListener('input', (event) => {
         updateCameraX(event.target.value)
     })
@@ -238,7 +283,7 @@ function main() {
     slider_input = document.getElementById('sliderCamZ')
     slider_input.addEventListener('input', (event) => {
         updateCameraZ(event.target.value)
-    })
+    })*/
 
     slider_input = document.getElementById('sliderNear')
     slider_input.addEventListener('input', (event) => {
@@ -277,6 +322,12 @@ function main() {
 
     g_program_characters = createProgram(gl, VSHADER_SOURCE_CHARACTERS, FSHADER_SOURCE_CHARACTERS)
     if (!g_program_characters) {
+        console.log('Failed to create program')
+        return
+    }
+
+    g_program_skybox = createProgram(gl, VSHADER_SOURCE_SKYBOX, FSHADER_SOURCE_SKYBOX)
+    if (!g_program_skybox) {
         console.log('Failed to create program')
         return
     }
@@ -340,6 +391,16 @@ function main() {
     g_last_frame_ms = Date.now()
     g_rotation_axis = [0, 1, 0]
 
+    // camera setup
+    g_camera_x = INITIAL_CAMERA_X
+    g_camera_y = INITIAL_CAMERA_Y
+    g_camera_z = INITIAL_CAMERA_Z
+
+    g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, -1, -1, 4, 0, 1, 0)
+    g_camera_matrix.rotate(-5, 0, 1, 0).translate(0, -1.3, 5)
+    rotateCameraY(0)
+    
+    
     // Initialize our data
     updateFPS(INITIAL_FPS)
     updateAmbientLightStrength(INITIAL_AMBIENT_STRENGTH)
@@ -347,17 +408,16 @@ function main() {
     updateLightX(INITIAL_LIGHT_X)
     updateLightY(INITIAL_LIGHT_Y)
     updateLightZ(INITIAL_LIGHT_Z)
-    updateCameraX(INITIAL_CAMERA_X)
-    updateCameraY(INITIAL_CAMERA_Y)
-    updateCameraZ(INITIAL_CAMERA_Z)
     updateNear(INITIAL_NEAR)
     updateFar(INITIAL_FAR)
     updateFOVY(INITIAL_FOVY)
     updateAspect(INITIAL_ASPECT)
 
-    // camera setup
-    g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, -1, -1, 4, 0, 1, 0)
-    g_camera_matrix.rotate(-5, 0, 1, 0).translate(0, -1.3, 5)
+    // skybox
+    positionLocation = gl.getAttribLocation(g_program_skybox, "a_position");
+    skyboxLocation = gl.getUniformLocation(g_program_skybox, "u_skybox");
+    viewDirectionProjectionInverseLocation = 
+        gl.getUniformLocation(g_program_skybox, "u_viewDirectionProjectionInverse");
 
     tick()
 }
@@ -379,12 +439,12 @@ function setupAnimFrames(models) {
         }
 
         // put the normal attributes after our mesh
-        var attributes = ekko.mesh.concat(jinx.mesh).concat(map.mesh).concat(grid_mesh)              // vertices
-                    .concat(ekko.normals).concat(jinx.normals).concat(map.normals).concat(grid_normals) // normals
-                    .concat(ekko.texture_coords).concat(jinx.texture_coords).concat(map.texture_coords)        // tex coords
+        var attributes = ekko.mesh.concat(jinx.mesh).concat(skybox).concat(grid_mesh) // vertices
+                    .concat(ekko.normals).concat(jinx.normals).concat(grid_normals)   // normals
+                    .concat(ekko.texture_coords).concat(jinx.texture_coords)          // tex coords
 
         gl.bindBuffer(gl.ARRAY_BUFFER, VBOloc)
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW) // TODO: figure out how to change attributes
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW)
 
         VBO_Animation_Frames.push(VBOloc)
     }
@@ -436,7 +496,7 @@ function setupTextures() {
             new Uint8Array([0, 0, 255, 255]));
     });
 
-    // map
+    /*// map
     var map_texture = gl.createTexture();
 
     gl.activeTexture(gl.TEXTURE3)
@@ -452,7 +512,66 @@ function setupTextures() {
         gl.bindTexture(gl.TEXTURE_2D, map_texture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, map_texture_image);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    });
+    });*/
+
+    // skybox
+    var texture = gl.createTexture();
+
+    gl.activeTexture(gl.TEXTURE3)
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+
+  const faceInfos = [
+    {
+      target: gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+      url: 'textures/pos-x.jpg',
+    },
+    {
+      target: gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
+      url: 'textures/neg-x.jpg',
+    },
+    {
+      target: gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
+      url: 'textures/pos-y.jpg',
+    },
+    {
+      target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+      url: 'textures/neg-y.jpg',
+    },
+    {
+      target: gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
+      url: 'textures/pos-z.jpg',
+    },
+    {
+      target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Z,
+      url: 'textures/neg-x.jpg',
+    },
+  ];
+  faceInfos.forEach((faceInfo) => {
+    const {target, url} = faceInfo;
+
+    // Upload the canvas to the cubemap face.
+    const level = 0;
+    const internalFormat = gl.RGBA;
+    const width = 512;
+    const height = 512;
+    const format = gl.RGBA;
+    const type = gl.UNSIGNED_BYTE;
+
+    // setup each face so it's immediately renderable
+    gl.texImage2D(target, level, internalFormat, width, height, 0, format, type, null);
+
+    // Asynchronously load an image
+    const image = new Image();
+    image.src = url;
+    image.addEventListener('load', function() {
+      // Now that the image has loaded make copy it to the texture.
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
+      gl.texImage2D(target, level, internalFormat, format, type, image);
+      gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+    })
+    })
+    gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
 }
 
 // extra constants for cleanliness
@@ -493,12 +612,13 @@ function tick() {
     delta_time_g += current_time - g_last_frame_ms
     g_last_frame_ms = current_time
     
-    if (delta_time_g > 1500) {
+    /*if (delta_time_g > 1500) {
         animationLevel = 1
     }
     if (delta_time_g > 3000) {
         animationLevel = 2
-    }
+    }*/
+   animationLevel = 2
 
     // camera rotation animation
     var angleSwitch = 1;
@@ -542,11 +662,11 @@ function drawJinxEkkoAnimation() {
     if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
         return -1
     }
-    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + map.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + skybox.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
-    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + map.vertex_count + g_grid_vertex_count * 3 + 
-                                                        ekko.normals.length + jinx.normals.length + map.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + skybox.length + g_grid_vertex_count * 3 + 
+                                                        ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
     
@@ -638,20 +758,47 @@ function draw() {
 
     drawJinxEkkoAnimation()
 
-    // draw map
+    /*/// draw map
     gl.uniform1i(g_image_location, 3)
     gl.uniformMatrix4fv(g_model_ref, false, map.model_matrix.elements)
     gl.uniformMatrix4fv(g_world_ref, false, map.world_matrix.elements)
 
-    gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3 + jinx.vertex_count / 3, map.vertex_count / 3)
+    gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3 + jinx.vertex_count / 3, map.vertex_count / 3)*/
 
-    /*// Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
+    // Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
     // Note that we can use the regular vertex offset with gl.LINES
     gl.uniform1i(g_lighting_ref, 0) // don't use lighting for the grid
     //gl.uniform3fv(g_ambient_light, new Float32Array([1, 1, 1])) // grid is green
     gl.uniformMatrix4fv(g_model_ref, false, g_model_matrix_grid.elements)
     gl.uniformMatrix4fv(g_world_ref, false, g_world_matrix_grid.elements)
-    gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3, g_grid_vertex_count)*/
+    gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3 + skybox.length / 3, g_grid_vertex_count) 
+
+    /*// skybox
+    gl.useProgram(g_program_skybox)
+
+    var viewMatrix = new Matrix4().setInverseOf(g_camera_matrix);
+ 
+    // We only care about direction so remove the translation
+    viewMatrix[12] = 0;
+    viewMatrix[13] = 0;
+    viewMatrix[14] = 0;
+    
+    var viewDirectionProjectionMatrix = 
+        perspective_matrix.concat(viewMatrix);
+    var viewDirectionProjectionInverseMatrix = 
+        new Matrix4().setInverseOf(viewDirectionProjectionMatrix);
+
+    // Set the uniforms
+    gl.uniformMatrix4fv(
+        viewDirectionProjectionInverseLocation, false,
+        viewDirectionProjectionInverseMatrix.elements);
+    
+    // let our quad pass the depth test at 1.0
+    gl.depthFunc(gl.LEQUAL);
+
+    gl.uniform1i(skyboxLocation, 3);
+
+    gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3 + jinx.vertex_count / 3 + skybox.length / 3 + g_grid_vertex_count, skybox.length);*/
 }
 
 // Helper to setup vec3 attributes
@@ -717,8 +864,13 @@ function updateLightZ(amount) {
 function updateCameraX(amount) {        // change to .rotate
     label = document.getElementById('cameraX')
     label.textContent = `Camera X: ${Number(amount).toFixed(2)}`
-    //g_camera_matrix.rotate(amount, 1, 0, 0)
     g_camera_x = Number(amount)
+}
+
+function rotateCameraY(amount) {
+    label = document.getElementById('rotateCameraY')
+    label.textContent = `Camera Y: ${Number(amount).toFixed(2)}`
+    g_camera_matrix.rotate(amount, 0, 1, 0)
 }
 
 function updateCameraY(amount) {
