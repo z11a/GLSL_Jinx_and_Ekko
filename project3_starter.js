@@ -156,12 +156,12 @@ const INITIAL_SPEC_STRENGTH = 34.0
 const INITIAL_LIGHT_X = 0.75
 const INITIAL_LIGHT_Y = 0.86
 const INITIAL_LIGHT_Z = -1.00
-const INITIAL_CAMERA_X = 1.25
+const INITIAL_CAMERA_X = 0
 const INITIAL_CAMERA_Y = -2.35
 const INITIAL_CAMERA_Z = -3.00
 const INITIAL_NEAR = 1
 const INITIAL_FAR = 200
-const INITIAL_FOVY = 45
+const INITIAL_FOVY = 48
 const INITIAL_ASPECT = 1.5
 
 // Matrices for positioning the grid
@@ -185,6 +185,7 @@ class Model {
 
 var ekko
 var jinx
+var map
 
 // dont want these changing
 var g_ekko_model_matrix
@@ -290,17 +291,24 @@ function main() {
     models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_6)), new Model(parseOBJ(JINX_MESH_UNPARSED_6))])
     models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_7)), new Model(parseOBJ(JINX_MESH_UNPARSED_7))])
 
+    map = new Model(parseOBJ(MAP_UNPARSED))
+
     gl.useProgram(g_program_characters)
 
     // setup all animation frames
     frameNumber = 0;
     setupAnimFrames(models)
 
+    // matrix stuff
     g_ekko_model_matrix = new Matrix4().scale(1.5, 1.5, 1.5).rotate(130, 0, 1, 0).translate(-0.3, 2.6, -2.3)
     g_ekko_world_matrix = new Matrix4().translate(-1, -0.3, 4.5)
    
     g_jinx_model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-35, 0, 1, 0)
     g_jinx_world_matrix = new Matrix4().translate(0.7, -2, -1)
+
+    // map
+    map.model_matrix = new Matrix4().scale(7.5, 7.5, 7.5).rotate(40, 0, 1, 0)
+    map.world_matrix = new Matrix4().translate(0, -11.5, 0)
 
     // Put the grid "below" the camera (and cubes)
     g_model_matrix_grid = new Matrix4()
@@ -347,7 +355,7 @@ function main() {
     updateFOVY(INITIAL_FOVY)
     updateAspect(INITIAL_ASPECT)
 
-    // inital camera setup
+    // camera setup
     g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, -1, -1, 4, 0, 1, 0)
     g_camera_matrix.rotate(-5, 0, 1, 0).translate(0, -1.3, 5)
 
@@ -371,9 +379,9 @@ function setupAnimFrames(models) {
         }
 
         // put the normal attributes after our mesh
-        var attributes = ekko.mesh.concat(jinx.mesh).concat(grid_mesh)              // vertices
-                    .concat(ekko.normals).concat(jinx.normals).concat(grid_normals) // normals
-                    .concat(ekko.texture_coords).concat(jinx.texture_coords)        // tex coords
+        var attributes = ekko.mesh.concat(jinx.mesh).concat(map.mesh).concat(grid_mesh)              // vertices
+                    .concat(ekko.normals).concat(jinx.normals).concat(map.normals).concat(grid_normals) // normals
+                    .concat(ekko.texture_coords).concat(jinx.texture_coords).concat(map.texture_coords)        // tex coords
 
         gl.bindBuffer(gl.ARRAY_BUFFER, VBOloc)
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(attributes), gl.STATIC_DRAW) // TODO: figure out how to change attributes
@@ -428,7 +436,23 @@ function setupTextures() {
             new Uint8Array([0, 0, 255, 255]));
     });
 
+    // map
+    var map_texture = gl.createTexture();
 
+    gl.activeTexture(gl.TEXTURE3)
+    gl.bindTexture(gl.TEXTURE_2D, map_texture);
+
+    // default fill just in case
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+        new Uint8Array([0, 0, 255, 255]));
+
+    var map_texture_image = new Image();
+    map_texture_image.src = "textures/map_texture_flipped.png";
+    ekko_texture_image.addEventListener('load', function() {
+        gl.bindTexture(gl.TEXTURE_2D, map_texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, map_texture_image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    });
 }
 
 // extra constants for cleanliness
@@ -483,7 +507,6 @@ function tick() {
     }
 
     angle = angleSwitch * ROTATION_SPEED * 4
-    
     g_camera_matrix.rotate(angle, 0, 1, 0)
 
     // character animation 
@@ -519,17 +542,16 @@ function drawJinxEkkoAnimation() {
     if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
         return -1
     }
-    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + map.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
-    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
-                                                        ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + map.vertex_count + g_grid_vertex_count * 3 + 
+                                                        ekko.normals.length + jinx.normals.length + map.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
     
     // use lighting for ekko and jinx
     gl.uniform1i(g_lighting_ref, 1)
-
 
     // default ambient lighting for ekko and jinx
     //gl.uniform3fv(g_ambient_light, new Float32Array([0.2, 0.2, 0.2]))
@@ -591,8 +613,8 @@ function draw() {
     gl.useProgram(g_program_characters)
 
     // setup our camera
-    /*g_camera_matrix.setLookAt(-g_camera_x, g_camera_y, g_camera_z, 0, 0, 4, 0, 1, 0)
-    g_camera_matrix.translate(0, -0.5, 5)*/
+    //g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, -1, -1, 4, 0, 1, 0)
+    //g_camera_matrix.rotate(-5, 0, 1, 0).translate(0, -1.3, 5)
     gl.uniformMatrix4fv(g_camera_ref, false, g_camera_matrix.elements)
     var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
     gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
@@ -616,13 +638,20 @@ function draw() {
 
     drawJinxEkkoAnimation()
 
-    // Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
+    // draw map
+    gl.uniform1i(g_image_location, 3)
+    gl.uniformMatrix4fv(g_model_ref, false, map.model_matrix.elements)
+    gl.uniformMatrix4fv(g_world_ref, false, map.world_matrix.elements)
+
+    gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3 + jinx.vertex_count / 3, map.vertex_count / 3)
+
+    /*// Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
     // Note that we can use the regular vertex offset with gl.LINES
     gl.uniform1i(g_lighting_ref, 0) // don't use lighting for the grid
     //gl.uniform3fv(g_ambient_light, new Float32Array([1, 1, 1])) // grid is green
     gl.uniformMatrix4fv(g_model_ref, false, g_model_matrix_grid.elements)
     gl.uniformMatrix4fv(g_world_ref, false, g_world_matrix_grid.elements)
-    gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3, g_grid_vertex_count)
+    gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3, g_grid_vertex_count)*/
 }
 
 // Helper to setup vec3 attributes
@@ -645,7 +674,6 @@ function updateFPS(amount) {
     label = document.getElementById('fps')
     label.textContent = `FPS: ${Number(amount).toFixed(2)}`
     fps = 1000 / amount
-    console.log(fps)
 }
 // Event to change which rotation is selected
 function updateRotation() {
@@ -686,9 +714,10 @@ function updateLightZ(amount) {
     g_light_z = Number(amount)
 }
 
-function updateCameraX(amount) {
+function updateCameraX(amount) {        // change to .rotate
     label = document.getElementById('cameraX')
     label.textContent = `Camera X: ${Number(amount).toFixed(2)}`
+    //g_camera_matrix.rotate(amount, 1, 0, 0)
     g_camera_x = Number(amount)
 }
 

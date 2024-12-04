@@ -8,7 +8,7 @@
     <script src="project3_starter.js"></script>
     <script src="models/ekko.js"></script>
     <script src="models/jinx.js"></script>
-    <script src="teapot.js"></script>
+    <script src="models/map.js"></script>
 
     <!-- WebGL Utility Scripts -->
     <script src="lib/webgl-utils.js"></script>
@@ -30,22 +30,6 @@
         <input type="range" id="sliderFPS" min="0" max="120" step=".01" value="12" />
         <label id="fps" for="sliderFPS"></label>
     </div>
-    <!-- Radio buttons for rotation -->
-    <div>
-        <input type="radio" id="rotateX" name="rotation" value="X" checked/>
-        <label for="rotateX">Rotate X</label>
-  
-        <input type="radio" id="rotateY" name="rotation" value="Y" />
-        <label for="rotateY">Rotate Y</label>
-  
-        <input type="radio" id="rotateZ" name="rotation" value="Z" />
-        <label for="rotateZ">Rotate Z</label>
-    </div>
-
-    <!-- Button to actually change rotation -->
-    <p>
-        <input type="button" onclick="updateRotation()" value="Select Rotation">
-    </p>
 
     <!-- Slider for light position / strength -->
     <div>
