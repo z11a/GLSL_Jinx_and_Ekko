@@ -102,32 +102,6 @@ var FSHADER_SOURCE_CHARACTERS = `
     }
 `
 
-var VSHADER_SOURCE_SKYBOX = `
-    attribute vec4 a_position;
-
-    varying vec4 v_position;
-
-    void main() {
-        v_position = a_position;
-        gl_Position = a_position;
-        gl_Position.z = 1.00;
-    }
-` 
-
-var FSHADER_SOURCE_SKYBOX = `
-    precision mediump float;
-    
-    uniform samplerCube u_skybox;
-    uniform mat4 u_viewDirectionProjectionInverse;
-    
-    varying vec4 v_position;
-
-    void main() {
-        vec4 t = u_viewDirectionProjectionInverse * v_position;
-        gl_FragColor = textureCube(u_skybox, normalize(t.xyz / t.w));
-    }
-` 
-
 // the rotation matrix being updated each frame
 var g_teapot_model_matrix
 
@@ -211,7 +185,6 @@ class Model {
 
 var ekko
 var jinx
-var map
 
 // dont want these changing
 var g_ekko_model_matrix
@@ -224,21 +197,6 @@ var animationLevel = 2;
 
 // each element = [[ekko model][jinx model]]
 var models = []
-
-// skybox
-var positionLocation
-var skyboxLocation
-var viewDirectionProjectionInverseLocation
-
-var skybox = 
-    [
-      -1, -1, 
-       1, -1, 
-      -1,  1, 
-      -1,  1,
-       1, -1,
-       1,  1,
-    ];
 
 function main() {
     // Listen for slider changes
@@ -272,19 +230,6 @@ function main() {
         rotateCameraY(event.target.value)
     })
 
-    /*slider_input = document.getElementById('sliderCamX')
-    slider_input.addEventListener('input', (event) => {
-        updateCameraX(event.target.value)
-    })
-    slider_input = document.getElementById('sliderCamY')
-    slider_input.addEventListener('input', (event) => {
-        updateCameraY(event.target.value)
-    })
-    slider_input = document.getElementById('sliderCamZ')
-    slider_input.addEventListener('input', (event) => {
-        updateCameraZ(event.target.value)
-    })*/
-
     slider_input = document.getElementById('sliderNear')
     slider_input.addEventListener('input', (event) => {
         updateNear(event.target.value)
@@ -314,20 +259,8 @@ function main() {
         return;
     }
 
-    // Initialize GPU's vertex and fragment shaders programs
-    /*if (!initShaders(gl, VSHADER_SOURCE_EKKO, FSHADER_SOURCE_EKKO)) {
-        console.log('Failed to intialize shaders.')
-        return;
-    }*/
-
     g_program_characters = createProgram(gl, VSHADER_SOURCE_CHARACTERS, FSHADER_SOURCE_CHARACTERS)
     if (!g_program_characters) {
-        console.log('Failed to create program')
-        return
-    }
-
-    g_program_skybox = createProgram(gl, VSHADER_SOURCE_SKYBOX, FSHADER_SOURCE_SKYBOX)
-    if (!g_program_skybox) {
         console.log('Failed to create program')
         return
     }
@@ -342,8 +275,6 @@ function main() {
     models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_6)), new Model(parseOBJ(JINX_MESH_UNPARSED_6))])
     models.push([new Model(parseOBJ(EKKO_MESH_UNPARSED_7)), new Model(parseOBJ(JINX_MESH_UNPARSED_7))])
 
-    map = new Model(parseOBJ(MAP_UNPARSED))
-
     gl.useProgram(g_program_characters)
 
     // setup all animation frames
@@ -356,10 +287,6 @@ function main() {
    
     g_jinx_model_matrix = new Matrix4().scale(0.65, 0.65, 0.65).rotate(-35, 0, 1, 0)
     g_jinx_world_matrix = new Matrix4().translate(0.7, -2, -1)
-
-    // map
-    map.model_matrix = new Matrix4().scale(7.5, 7.5, 7.5).rotate(40, 0, 1, 0)
-    map.world_matrix = new Matrix4().translate(0, -11.5, 0)
 
     // Put the grid "below" the camera (and cubes)
     g_model_matrix_grid = new Matrix4()
@@ -400,7 +327,6 @@ function main() {
     g_camera_matrix.rotate(-5, 0, 1, 0).translate(0, -1.3, 5)
     rotateCameraY(0)
     
-    
     // Initialize our data
     updateFPS(INITIAL_FPS)
     updateAmbientLightStrength(INITIAL_AMBIENT_STRENGTH)
@@ -412,12 +338,6 @@ function main() {
     updateFar(INITIAL_FAR)
     updateFOVY(INITIAL_FOVY)
     updateAspect(INITIAL_ASPECT)
-
-    // skybox
-    positionLocation = gl.getAttribLocation(g_program_skybox, "a_position");
-    skyboxLocation = gl.getUniformLocation(g_program_skybox, "u_skybox");
-    viewDirectionProjectionInverseLocation = 
-        gl.getUniformLocation(g_program_skybox, "u_viewDirectionProjectionInverse");
 
     tick()
 }
@@ -439,7 +359,7 @@ function setupAnimFrames(models) {
         }
 
         // put the normal attributes after our mesh
-        var attributes = ekko.mesh.concat(jinx.mesh).concat(skybox).concat(grid_mesh) // vertices
+        var attributes = ekko.mesh.concat(jinx.mesh).concat(grid_mesh) // vertices
                     .concat(ekko.normals).concat(jinx.normals).concat(grid_normals)   // normals
                     .concat(ekko.texture_coords).concat(jinx.texture_coords)          // tex coords
 
@@ -495,83 +415,6 @@ function setupTextures() {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
             new Uint8Array([0, 0, 255, 255]));
     });
-
-    /*// map
-    var map_texture = gl.createTexture();
-
-    gl.activeTexture(gl.TEXTURE3)
-    gl.bindTexture(gl.TEXTURE_2D, map_texture);
-
-    // default fill just in case
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-        new Uint8Array([0, 0, 255, 255]));
-
-    var map_texture_image = new Image();
-    map_texture_image.src = "textures/map_texture_flipped.png";
-    ekko_texture_image.addEventListener('load', function() {
-        gl.bindTexture(gl.TEXTURE_2D, map_texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, map_texture_image);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    });*/
-
-    // skybox
-    var texture = gl.createTexture();
-
-    gl.activeTexture(gl.TEXTURE3)
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
-
-  const faceInfos = [
-    {
-      target: gl.TEXTURE_CUBE_MAP_POSITIVE_X,
-      url: 'textures/pos-x.jpg',
-    },
-    {
-      target: gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
-      url: 'textures/neg-x.jpg',
-    },
-    {
-      target: gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
-      url: 'textures/pos-y.jpg',
-    },
-    {
-      target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
-      url: 'textures/neg-y.jpg',
-    },
-    {
-      target: gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
-      url: 'textures/pos-z.jpg',
-    },
-    {
-      target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Z,
-      url: 'textures/neg-x.jpg',
-    },
-  ];
-  faceInfos.forEach((faceInfo) => {
-    const {target, url} = faceInfo;
-
-    // Upload the canvas to the cubemap face.
-    const level = 0;
-    const internalFormat = gl.RGBA;
-    const width = 512;
-    const height = 512;
-    const format = gl.RGBA;
-    const type = gl.UNSIGNED_BYTE;
-
-    // setup each face so it's immediately renderable
-    gl.texImage2D(target, level, internalFormat, width, height, 0, format, type, null);
-
-    // Asynchronously load an image
-    const image = new Image();
-    image.src = url;
-    image.addEventListener('load', function() {
-      // Now that the image has loaded make copy it to the texture.
-      gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
-      gl.texImage2D(target, level, internalFormat, format, type, image);
-      gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
-    })
-    })
-    gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
 }
 
 // extra constants for cleanliness
@@ -612,13 +455,12 @@ function tick() {
     delta_time_g += current_time - g_last_frame_ms
     g_last_frame_ms = current_time
     
-    /*if (delta_time_g > 1500) {
+    /*if (delta_time_g > 1500) {    // used to show i have control over the textures and animation by slowly introducing each step
         animationLevel = 1
     }
     if (delta_time_g > 3000) {
         animationLevel = 2
     }*/
-   animationLevel = 2
 
     // camera rotation animation
     var angleSwitch = 1;
@@ -640,16 +482,9 @@ function tick() {
             break;
     }
 
-    //jinx.world_matrix.rotate(angle, 0, 1, 0)
-    
     // ref frame
     g_ekko_world_matrix = new Matrix4()   
     g_ekko_world_matrix.concat(g_jinx_world_matrix).concat(g_world_matrix_grid)
-
-    /*// lighting rotate
-    g_light_x = jinx.world_matrix.elements[12] + 0.2
-    g_light_y = jinx.world_matrix.elements[13] + 0.3
-    g_light_z = jinx.world_matrix.elements[14]*/
 
     draw()
 
@@ -662,10 +497,10 @@ function drawJinxEkkoAnimation() {
     if (setup_vec(3, g_program_characters, 'a_Position', 0) < 0) {
         return -1
     }
-    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + skybox.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
+    if (setup_vec(3, g_program_characters, 'a_Normal', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
-    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + skybox.length + g_grid_vertex_count * 3 + 
+    if (setup_vec(2, g_program_characters, 'a_TexCoord', (ekko.vertex_count + jinx.vertex_count + g_grid_vertex_count * 3 + 
                                                         ekko.normals.length + jinx.normals.length + g_grid_vertex_count * 3) * FLOAT_SIZE) < 0) {
         return -1
     }
@@ -732,9 +567,7 @@ function draw() {
 
     gl.useProgram(g_program_characters)
 
-    // setup our camera
-    //g_camera_matrix = new Matrix4().setLookAt(-g_camera_x, g_camera_y, g_camera_z, -1, -1, 4, 0, 1, 0)
-    //g_camera_matrix.rotate(-5, 0, 1, 0).translate(0, -1.3, 5)
+    // camera / projection
     gl.uniformMatrix4fv(g_camera_ref, false, g_camera_matrix.elements)
     var perspective_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
     gl.uniformMatrix4fv(g_projection_ref, false, perspective_matrix.elements)
@@ -758,47 +591,13 @@ function draw() {
 
     drawJinxEkkoAnimation()
 
-    /*/// draw map
-    gl.uniform1i(g_image_location, 3)
-    gl.uniformMatrix4fv(g_model_ref, false, map.model_matrix.elements)
-    gl.uniformMatrix4fv(g_world_ref, false, map.world_matrix.elements)
-
-    gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3 + jinx.vertex_count / 3, map.vertex_count / 3)*/
-
     // Draw the grid with gl.lines // TODO: fix grid, maybe add floor instead with new shader
     // Note that we can use the regular vertex offset with gl.LINES
     gl.uniform1i(g_lighting_ref, 0) // don't use lighting for the grid
     //gl.uniform3fv(g_ambient_light, new Float32Array([1, 1, 1])) // grid is green
     gl.uniformMatrix4fv(g_model_ref, false, g_model_matrix_grid.elements)
     gl.uniformMatrix4fv(g_world_ref, false, g_world_matrix_grid.elements)
-    gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3 + skybox.length / 3, g_grid_vertex_count) 
-
-    /*// skybox
-    gl.useProgram(g_program_skybox)
-
-    var viewMatrix = new Matrix4().setInverseOf(g_camera_matrix);
- 
-    // We only care about direction so remove the translation
-    viewMatrix[12] = 0;
-    viewMatrix[13] = 0;
-    viewMatrix[14] = 0;
-    
-    var viewDirectionProjectionMatrix = 
-        perspective_matrix.concat(viewMatrix);
-    var viewDirectionProjectionInverseMatrix = 
-        new Matrix4().setInverseOf(viewDirectionProjectionMatrix);
-
-    // Set the uniforms
-    gl.uniformMatrix4fv(
-        viewDirectionProjectionInverseLocation, false,
-        viewDirectionProjectionInverseMatrix.elements);
-    
-    // let our quad pass the depth test at 1.0
-    gl.depthFunc(gl.LEQUAL);
-
-    gl.uniform1i(skyboxLocation, 3);
-
-    gl.drawArrays(gl.TRIANGLES, ekko.vertex_count / 3 + jinx.vertex_count / 3 + skybox.length / 3 + g_grid_vertex_count, skybox.length);*/
+    gl.drawArrays(gl.LINES, ekko.vertex_count / 3 + jinx.vertex_count / 3, g_grid_vertex_count) 
 }
 
 // Helper to setup vec3 attributes
@@ -822,16 +621,7 @@ function updateFPS(amount) {
     label.textContent = `FPS: ${Number(amount).toFixed(2)}`
     fps = 1000 / amount
 }
-// Event to change which rotation is selected
-function updateRotation() {
-    var rotateX = document.getElementById('rotateX')
-    var rotateY = document.getElementById('rotateY')
-    var rotateZ = document.getElementById('rotateZ')
 
-    g_rotation_axis[0] = Number(rotateX.checked)
-    g_rotation_axis[1] = Number(rotateY.checked)
-    g_rotation_axis[2] = Number(rotateZ.checked)
-}
 function updateAmbientLightStrength(amount) {
     label = document.getElementById('ambientLightStrength')
     label.textContent = `Ambient Light Strength: ${Number(amount).toFixed(2)}`
