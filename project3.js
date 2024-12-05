@@ -151,7 +151,7 @@ var g_aspect
 
 // constants for setup
 const INITIAL_FPS = 12
-const INITIAL_AMBIENT_STRENGTH = 0.45
+const INITIAL_AMBIENT_STRENGTH = 0.6
 const INITIAL_SPEC_STRENGTH = 34.0
 const INITIAL_LIGHT_X = 0.75
 const INITIAL_LIGHT_Y = 0.86
